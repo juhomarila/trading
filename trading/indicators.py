@@ -7,7 +7,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from pyti.moving_average_convergence_divergence import moving_average_convergence_divergence as macd
 from pyti.exponential_moving_average import exponential_moving_average as ema
-from .models import finnish_stock_daily, signals, optimal_buy_sell_points, reverse_signals, buy_sell_point_data
+from .models import finnish_stock_daily, signals, optimal_buy_sell_points, reverse_signals
 
 
 def calculate_BBP8(stock_symbol, model, reverse, period):
@@ -371,7 +371,6 @@ def calculate_sd(stock_symbol, model, reverse, period):
 
 
 def find_optimum_buy_sell_points(stock_symbol, period=14):
-    # Fetch data from the models
     stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('date')
     investment = 100
     compare_investment = 100
@@ -381,17 +380,15 @@ def find_optimum_buy_sell_points(stock_symbol, period=14):
     sell_count = 0
     buy_count = 0
     last_command = 'SELL'
-    # Analyze the values of the indicators to determine the optimum buy and sell points
     for i in range(period, len(stock_data)):
         stock_daily = stock_data[i]
-        # indicators = signals.objects.get(stock=stock_daily) #not reverse
         try:
             indicators = reverse_signals.objects.get(stock=stock_daily)
         except ObjectDoesNotExist:
             continue
         close_val = stock_data[i].close
-        open_val = stock_data[i].open
-        date = stock_data[i].date
+        # open_val = stock_data[i].open
+        # date = stock_data[i].date
         prev_close_val = stock_data[i - period].close
         if indicators.adx > 22 \
                 and indicators.macd * 5 < indicators.macd_signal and close_val > prev_close_val - indicators.std_dev:
@@ -399,7 +396,6 @@ def find_optimum_buy_sell_points(stock_symbol, period=14):
                 optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                        command="BUY", value=close_val)
             if last_command != "BUY":
-                #print("BUY ", stock_symbol, "CLOSE: ", close_val, date)
                 buy_count += 1
                 stocks = investment / close_val
                 investment = 0
@@ -413,13 +409,10 @@ def find_optimum_buy_sell_points(stock_symbol, period=14):
                 optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                        command="SELL", value=close_val)
             if last_command != "SELL":
-                #print("SELL ", stock_symbol, "CLOSE: ", close_val, date)
                 sell_count += 1
                 investment = stocks * close_val
                 stocks = 0
                 last_command = "SELL"
-    #print(investment, stocks)
-    #print(buy_count, sell_count)
     if investment != 0:
         return investment - 100, (compare_stocks * stock_data[len(stock_data) - 1].close) - 100
     else:
@@ -430,9 +423,9 @@ def find_optimum_buy_sell_points(stock_symbol, period=14):
 def calculate_profit_loss(stock_symbol, initial_investment):
     buy_sell_points = optimal_buy_sell_points.objects.filter(symbol=stock_symbol).order_by('stock__date')
 
-    investment_10_days_later = initial_investment
-    stocks_10_days_later = 0
-    investment_10_days_later_added = 0
+    investment = initial_investment
+    stocks = 0
+    investment_added = 0
     last_command = 'SELL'
 
     for point in buy_sell_points:
@@ -440,37 +433,40 @@ def calculate_profit_loss(stock_symbol, initial_investment):
             queryset = finnish_stock_daily.objects.filter(symbol=stock_symbol, date__gt=point.stock.date).order_by(
                 'date')
             if queryset.count() >= 5:
-                ten_rows_later_stock = queryset[4]
+                five_rows_later_stock = queryset[4]
                 # print("ARVO KYMMENEN PÄIVÄÄ MYÖHEMMIN: ", str(ten_rows_later_stock.close) + " PÄIVÄ: ",
                 #      ten_rows_later_stock.date)
             else:
-                ten_rows_later_stock = None
+                five_rows_later_stock = None
                 # print("ARVO KYMMENEN PÄIVÄÄ MYÖHEMMIN: ", str(point.value) + " PÄIVÄ: ",
                 #      point.stock.date)
-            if investment_10_days_later > 0:
-                stocks_10_days_later = (investment_10_days_later - 3) / ten_rows_later_stock.close if ten_rows_later_stock is not None else (investment_10_days_later - 3) / point.value
-                investment_10_days_later = 0
+            if investment > 0:
+                stocks = (investment - 3) / five_rows_later_stock.close if five_rows_later_stock is not None \
+                    else (investment - 3) / point.value
+                investment = 0
             else:
-                stocks_10_days_later = (initial_investment - 3) / ten_rows_later_stock.close if ten_rows_later_stock is not None else (investment_10_days_later - 3) / point.value
-                investment_10_days_later_added += 1
+                stocks = (initial_investment - 3) / five_rows_later_stock.close if five_rows_later_stock is not None \
+                    else (investment - 3) / point.value
+                investment_added += 1
             last_command = 'BUY'
         elif point.command == 'SELL' and last_command != 'SELL':
             queryset = finnish_stock_daily.objects.filter(symbol=stock_symbol, date__gt=point.stock.date).order_by(
                 'date')
             if queryset.count() >= 5:
-                ten_rows_later_stock = queryset[4]
+                five_rows_later_stock = queryset[4]
             else:
-                ten_rows_later_stock = None
-            investment_10_days_later = (stocks_10_days_later * ten_rows_later_stock.close) - 3 if ten_rows_later_stock is not None else (stocks_10_days_later * point.value) - 3
-            stocks_10_days_later = 0
-            #print("INVESTOINTI: ", str(int(investment)) + " INVESTOITI VIIKKOA MYÖHEMMIN: ", str(int(investment_10_days_later)))
+                five_rows_later_stock = None
+            investment = (stocks * five_rows_later_stock.close) - 3 if five_rows_later_stock is not None \
+                else (stocks * point.value) - 3
+            stocks = 0
+            # print("INVESTOINTI: ", str(int(investment)) + " INVESTOITI VIIKKOA MYÖHEMMIN: ", str(int(investment_10_days_later)))
             last_command = 'SELL'
 
     # Calculate profit/loss based on remaining investment and current stock price
     current_stock_price = finnish_stock_daily.objects.filter(symbol=stock_symbol).latest('date').close
-    total_value_10_days_later = investment_10_days_later if investment_10_days_later != 0 else stocks_10_days_later * current_stock_price
-    profit_loss_10_days_later = total_value_10_days_later
-    #print("OSAKE: " + stock_symbol + " TULOS: " + str(profit_loss) + " INVESTOINTEJA LISÄTTY " + str(investment_added))
-    #print("TULOS 10 PÄIVÄÄ MYHÖEMMIN: " + str(profit_loss_10_days_later) + " INVESTOINTEJA LISÄTTY " + str(investment_10_days_later_added))
-    winning = True if profit_loss_10_days_later - initial_investment > 0 else False
-    return profit_loss_10_days_later, investment_10_days_later_added, winning
+    total_value = investment if investment!= 0 else stocks * current_stock_price
+    profit_loss = total_value
+    # print("OSAKE: " + stock_symbol + " TULOS: " + str(profit_loss) + " INVESTOINTEJA LISÄTTY " + str(investment_added))
+    # print("TULOS 10 PÄIVÄÄ MYHÖEMMIN: " + str(profit_loss_10_days_later) + " INVESTOINTEJA LISÄTTY " + str(investment_10_days_later_added))
+    winning = True if profit_loss - initial_investment > 0 else False
+    return profit_loss, investment_added, winning
