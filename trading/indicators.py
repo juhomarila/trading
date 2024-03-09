@@ -464,9 +464,9 @@ def calculate_profit_loss(stock_symbol, initial_investment):
 
     # Calculate profit/loss based on remaining investment and current stock price
     current_stock_price = finnish_stock_daily.objects.filter(symbol=stock_symbol).latest('date').close
-    total_value = investment if investment!= 0 else stocks * current_stock_price
+    total_value = investment if investment != 0 else stocks * current_stock_price
     profit_loss = total_value
-    # print("OSAKE: " + stock_symbol + " TULOS: " + str(profit_loss) + " INVESTOINTEJA LISÄTTY " + str(investment_added))
+    print("OSAKE: " + stock_symbol + " TULOS: " + str(profit_loss) + " INVESTOINTEJA LISÄTTY " + str(investment_added))
     # print("TULOS 10 PÄIVÄÄ MYHÖEMMIN: " + str(profit_loss_10_days_later) + " INVESTOINTEJA LISÄTTY " + str(investment_10_days_later_added))
     winning = True if profit_loss - initial_investment > 0 else False
     return profit_loss, investment_added, winning

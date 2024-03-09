@@ -3,18 +3,24 @@ import datetime
 import time
 import os
 import csv
+import matplotlib.pyplot as plt
+import io
+import urllib
+from django.http import HttpResponse
 # from alpha_vantage.timeseries import TimeSeries
 from django.http import HttpResponse
+from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from yahoofinancials import YahooFinancials
 
 from .machinelearning import train_machine_learning_model_future_values, train_machine_learning_model
-from .models import signals, finnish_stock_daily
+from .models import signals, finnish_stock_daily, optimal_buy_sell_points
 from .serializers import finnish_stock_daily_serializer, signals_serializer
 from .indicators import calculate_adl, calculate_adx, calculate_obv, calculate_rsi, \
     calculate_aroon, calculate_macd, calculate_BBP8, calculate_sd, find_optimum_buy_sell_points, calculate_ema, \
     calculate_profit_loss
+from .visualization import visualize_stock_and_investment
 
 
 def process_csv_data(request):
@@ -96,7 +102,7 @@ def find_buy_sell_points(request):
     total_procentual_added_list = []
     total_procentual_revenue_list = []
 
-    for initial_investment in range(50, 351, 10):
+    for initial_investment in range(100, 101, 10):
         symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
         total_profit = 0
         total_investments_added = 0
@@ -185,3 +191,34 @@ def index(request):
         return HttpResponse('Haista vittu')
     else:
         return HttpResponse("Hello, world. You're at the polls index.")
+
+
+def visualize(request):
+    ticker = request.GET.get('t')
+    investment = int(request.GET.get('i'))
+    if ticker and investment:
+        stock_symbol = ticker
+        buy_sell_points = optimal_buy_sell_points.objects.filter(symbol=stock_symbol).order_by('stock__date')
+        visualize_stock_and_investment(stock_symbol, buy_sell_points, investment)
+    else:
+        # Assuming you have already retrieved the buy_sell_points for a specific stock symbol
+        stock_symbol = 'HARVIA'
+        buy_sell_points = optimal_buy_sell_points.objects.filter(symbol=stock_symbol).order_by('stock__date')
+        visualize_stock_and_investment(stock_symbol, buy_sell_points, 100)
+    # Convert the plot to a PNG image
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png')
+    buffer.seek(0)
+
+    # Embed the image in the HTTP response
+    response = HttpResponse(buffer, content_type='image/png')
+    return response
+
+
+def index(request):
+    symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
+    return render(request, 'index.html', {'symbol_list': symbol_list})
+
+
+def settings(request, symbol):
+    return render(request, 'settings.html', {'stock_symbol': symbol})

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Visualization - Settings</title>
+</head>
+<body>
+    <h1>Settings</h1>
+    <form action="{% url 'visualize' %}" method="get">
+        <label for="investment">Enter your investment amount:</label>
+        <input type="number" id="investment" name="i" required>
+        <input type="submit" value="Generate Table">
+        <input type="hidden" name="t" value="{{ stock_symbol }}">
+    </form>
+</body>
+</html>

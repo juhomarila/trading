@@ -12,4 +12,7 @@ urlpatterns = [
     path('getdailydata', views.get_daily_data, name='getdailydata'),
     path('processdailydata', views.process_daily_data, name='processdailydata'),
     path('findbuysellpoints', views.find_buy_sell_points, name='findbuysellpoints'),
+    path('', views.index, name='index'),
+    path('settings/<str:symbol>/', views.settings, name='settings'),
+    path('visualize/', views.visualize, name='visualize'),
 ]
