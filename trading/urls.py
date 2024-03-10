@@ -15,4 +15,5 @@ urlpatterns = [
     path('', views.index, name='index'),
     path('settings/<str:symbol>/', views.settings, name='settings'),
     path('visualize/', views.visualize, name='visualize'),
+    path('signals/<str:symbol>/', views.signals_page, name='signals_page'),
 ]

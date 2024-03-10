@@ -10,41 +10,36 @@ from pyti.exponential_moving_average import exponential_moving_average as ema
 from .models import finnish_stock_daily, signals, optimal_buy_sell_points, reverse_signals
 
 
-def calculate_BBP8(stock_symbol, model, reverse, period):
+def calculate_BBP8(stock_symbol, model, reverse, period, daterange):
     # BBP8 Calculation
     if reverse:
-        stock_data = model.objects.filter(symbol=stock_symbol).order_by('-date')
+        stock_data = model.objects.filter(symbol=stock_symbol).order_by('-date')[:daterange]
     else:
         stock_data = model.objects.filter(symbol=stock_symbol).order_by('date')
+
     for i in range(len(stock_data)):
         if i < period:
-            if reverse:
-                if not reverse_signals.objects.filter(stock__id=i, bbp8__isnull=False).exists():
-                    reverse_signals.objects.update_or_create(symbol=stock_data[i].symbol, bbp8=1,
-                                                             stock=stock_data[i])
-                    continue
-            else:
-                if not signals.objects.filter(stock__id=i, bbp8__isnull=False).exists():
-                    signals.objects.update_or_create(symbol=stock_data[i].symbol, bbp8=1,
-                                                     stock=stock_data[i])
-                    continue
+            # Skip calculation for the initial period
+            continue
+
+        close_prices = [stock.close for stock in stock_data[i - period:i]]
+        upper_band = max(close_prices)
+        lower_band = min(close_prices)
+
+        if upper_band != lower_band and stock_data[i].close != lower_band:
+            BBP8 = (stock_data[i].close - lower_band) / (upper_band - lower_band)
         else:
-            close_prices = [stock.close for stock in stock_data[i - period:i]]
-            upper_band = max(close_prices)
-            lower_band = min(close_prices)
-            if upper_band != lower_band and stock_data[i] != lower_band:
-                BBP8 = (stock_data[i].close - lower_band) / (upper_band - lower_band)
-            else:
-                BBP8 = 0
-            print("BBP8 " + stock_data[i].symbol, BBP8, stock_data[i].date)
-            if reverse:
-                if not reverse_signals.objects.filter(stock__id=i, bbp8__isnull=False).exists():
-                    reverse_signals.objects.update_or_create(symbol=stock_data[i].symbol, bbp8=BBP8,
-                                                             stock=stock_data[i])
-            else:
-                if not signals.objects.filter(stock__id=i, bbp8__isnull=False).exists():
-                    signals.objects.update_or_create(symbol=stock_data[i].symbol, bbp8=BBP8,
-                                                     stock=stock_data[i])
+            BBP8 = 0
+
+        # Check if the entry already exists before updating or creating it
+        if reverse:
+            reverse_signal, _ = reverse_signals.objects.get_or_create(stock=stock_data[i], symbol=stock_symbol)
+            reverse_signal.bbp8 = BBP8
+            reverse_signal.save()
+        else:
+            signal, _ = signals.objects.get_or_create(stock=stock_data[i], symbol=stock_symbol)
+            signal.bbp8 = BBP8
+            signal.save()
 
 
 def calculate_obv(stock_symbol, model, reverse):
@@ -105,11 +100,11 @@ def calculate_adl(stock_symbol, model, reverse):
                     signals_obj.save()
 
 
-def calculate_adx(stock_symbol, model, reverse, period):
+def calculate_adx(stock_symbol, model, reverse, period, daterange):
     if reverse:
         stock_data = list(
             model.objects.filter(symbol=stock_symbol).values('date', 'close', 'open', 'high', 'low', 'volume')
-            .order_by('-date'))
+            .order_by('-date')[:daterange])
     else:
         stock_data = list(
             model.objects.filter(symbol=stock_symbol).values('date', 'close', 'open', 'high', 'low', 'volume')
@@ -134,11 +129,10 @@ def calculate_adx(stock_symbol, model, reverse, period):
         stock = model.objects.get(date=row['date'], symbol=stock_symbol)
         print("ADX " + stock_symbol, row['ADX'], period, row['date'])
         if reverse:
-            if not reverse_signals.objects.filter(stock__id=index, adx__isnull=False).exists():
-                reverse_signals_obj = reverse_signals.objects.filter(stock=stock, symbol=stock_symbol).first()
-                if reverse_signals_obj:
-                    reverse_signals_obj.adx = row['ADX']
-                    reverse_signals_obj.save()
+            reverse_signals_obj = reverse_signals.objects.filter(stock=stock, symbol=stock_symbol).first()
+            if reverse_signals_obj:
+                reverse_signals_obj.adx = row['ADX']
+                reverse_signals_obj.save()
         else:
             if not signals.objects.filter(stock__id=index, adx__isnull=False).exists():
                 signals_obj = signals.objects.filter(stock=stock, symbol=stock_symbol).first()
@@ -231,9 +225,9 @@ def ema(prices: List[float], period: int) -> List[float]:
     return ema_values
 
 
-def calculate_macd(stock_symbol, model, reverse, period):
+def calculate_macd(stock_symbol, model, reverse, period, daterange):
     if reverse:
-        stock_data = model.objects.filter(symbol=stock_symbol).order_by('-date')
+        stock_data = model.objects.filter(symbol=stock_symbol).order_by('-date')[:daterange]
     else:
         stock_data = model.objects.filter(symbol=stock_symbol).order_by('date')
     close_prices = [stock.close for stock in stock_data]
@@ -242,14 +236,12 @@ def calculate_macd(stock_symbol, model, reverse, period):
     for i, stock in enumerate(stock_data):
         if i < period:
             if reverse:
-                if not reverse_signals.objects.filter(stock__id=i, macd__isnull=False,
-                                                      macd_signal__isnull=False).exists():
-                    reverse_signals_obj = reverse_signals.objects.filter(stock=stock, symbol=stock_symbol).first()
-                    if reverse_signals_obj:
-                        reverse_signals_obj.macd = 0
-                        reverse_signals_obj.macd_signal = 0
-                        reverse_signals_obj.save()
-                    continue
+                reverse_signals_obj = reverse_signals.objects.filter(stock=stock, symbol=stock_symbol).first()
+                if reverse_signals_obj:
+                    reverse_signals_obj.macd = 0
+                    reverse_signals_obj.macd_signal = 0
+                    reverse_signals_obj.save()
+                continue
             else:
                 if not signals.objects.filter(stock__id=i, macd__isnull=False, macd_signal__isnull=False).exists():
                     signals_obj = signals.objects.filter(stock=stock, symbol=stock_symbol).first()
@@ -335,10 +327,10 @@ def calculate_rsi(stock_symbol, model, reverse, period):
                 signals_obj.save()
 
 
-def calculate_sd(stock_symbol, model, reverse, period):
+def calculate_sd(stock_symbol, model, reverse, period, daterange):
     # Retrieve stock data from the database and convert it to a pandas DataFrame
     if reverse:
-        stock_data = model.objects.filter(symbol=stock_symbol).order_by('-date')
+        stock_data = model.objects.filter(symbol=stock_symbol).order_by('-date')[:daterange]
     else:
         stock_data = model.objects.filter(symbol=stock_symbol).order_by('date')
     df = pd.DataFrame.from_records(stock_data.values())
@@ -355,12 +347,11 @@ def calculate_sd(stock_symbol, model, reverse, period):
         else:
             std_dev = row['std_dev']
         if reverse:
-            if not reverse_signals.objects.filter(stock__id=i, std_dev__isnull=False).exists():
-                print('SD: ', std_dev, stock.date)
-                reverse_signals_obj = reverse_signals.objects.filter(stock=stock_data[i], symbol=stock_symbol).first()
-                if reverse_signals_obj:
-                    reverse_signals_obj.std_dev = std_dev
-                    reverse_signals_obj.save()
+            print('SD: ', std_dev, stock.date)
+            reverse_signals_obj = reverse_signals.objects.filter(stock=stock_data[i], symbol=stock_symbol).first()
+            if reverse_signals_obj:
+                reverse_signals_obj.std_dev = std_dev
+                reverse_signals_obj.save()
         else:
             if not signals.objects.filter(stock__id=i, std_dev__isnull=False).exists():
                 print('SD: ', std_dev, stock.date)

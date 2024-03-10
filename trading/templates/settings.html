@@ -1,18 +1,66 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Visualization - Settings</title>
-</head>
-<body>
-    <h1>Settings</h1>
-    <form action="{% url 'visualize' %}" method="get">
-        <label for="investment">Enter your investment amount:</label>
-        <input type="number" id="investment" name="i" required>
-        <input type="submit" value="Generate Table">
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container d-flex flex-column align-items-center">
+    <h2>Taulun generoinnin asetukset {{ stock_symbol }}:lle</h2>
+    <form action="{% url 'visualize' %}" method="get" class="text-center">
+        <div class="input-group mb-3">
+            <span class="input-group-text">Sijoitettava rahamäärä:</span>
+            <input type="number" id="investment" name="i" type="text" class="form-control"
+                   placeholder="Anna rahamäärä..." required>
+        </div>
+        <div class="input-group mb-3">
+            <span class="input-group-text">Kulujen määrä euroissa (per transaktio):</span>
+            <input type="number" id="expenses" name="e" type="text" class="form-control"
+                   placeholder="Anna rahamäärä..." required>
+        </div>
+        <div class="input-group mb-3">
+            <span class="input-group-text">Valitse päivämääräväli:</span>
+            <input type="text" class="form-control datepicker" id="startdate" name="sd" placeholder="Valitse alkupäivä"
+                   required>
+            <input type="text" class="form-control datepicker" id="enddate" name="ed" placeholder="Valitse loppupäivä"
+                   required>
+            <button type="button" class="btn btn-outline-secondary" onclick="fillDates()">Maksimi aikäväli</button>
+        </div>
+        <button type="submit" class="btn btn-outline-secondary">Luo taulu</button>
         <input type="hidden" name="t" value="{{ stock_symbol }}">
     </form>
-</body>
-</html>
+    <div class="container fixed-bottom d-flex justify-content-center mb-3">
+        <a href="{% url 'signals_page' symbol=stock_symbol %}" class="btn btn-outline-secondary btn-lg"
+           style="width: 25%;">
+            {{ stock_symbol }} osto-/myyntisignaalit
+        </a>
+    </div>
+</div>
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/js/bootstrap-datepicker.min.js"></script>
+
+<script>
+    function fillDates() {
+        var start_date = new Date("{{ start_date }}");
+        var max_date = new Date("{{ max_date }}");
+
+        $('#startdate').datepicker('setDate', start_date);
+        $('#enddate').datepicker('setDate', max_date);
+    }
+    // Wait for the document to be ready
+    $(document).ready(function () {
+        // Get the start date and end date values passed from the view
+        var start_date = new Date("{{ start_date }}");
+        var max_date = new Date("{{ max_date }}");
+
+        // Initialize Bootstrap Datepicker for date inputs
+        $('.datepicker').datepicker({
+            format: 'yyyy-mm-dd', // Set the desired date format
+            autoclose: true, // Automatically close the datepicker when a date is selected
+            startDate: start_date,
+            endDate: max_date
+        });
+    });
+</script>
+{% endblock %}
+
+
+

@@ -1,31 +1,25 @@
-import requests
+import base64
 import datetime
-import time
 import os
 import csv
 import matplotlib.pyplot as plt
 import io
-import urllib
-from django.http import HttpResponse
-# from alpha_vantage.timeseries import TimeSeries
+
+from django.db.models import Min, Max, OuterRef, Subquery
 from django.http import HttpResponse
 from django.shortcuts import render
-from rest_framework.response import Response
-from rest_framework.decorators import api_view
 from yahoofinancials import YahooFinancials
 
-from .machinelearning import train_machine_learning_model_future_values, train_machine_learning_model
+# from .machinelearning import train_machine_learning_model_future_values, train_machine_learning_model
 from .models import signals, finnish_stock_daily, optimal_buy_sell_points
-from .serializers import finnish_stock_daily_serializer, signals_serializer
-from .indicators import calculate_adl, calculate_adx, calculate_obv, calculate_rsi, \
-    calculate_aroon, calculate_macd, calculate_BBP8, calculate_sd, find_optimum_buy_sell_points, calculate_ema, \
-    calculate_profit_loss
+from .indicators import calculate_adx, calculate_rsi, calculate_aroon, calculate_macd, \
+    calculate_BBP8, calculate_sd, find_optimum_buy_sell_points, calculate_profit_loss
 from .visualization import visualize_stock_and_investment
 
 
 def process_csv_data(request):
     print(os.getcwd())
-    folder_path = '/home/juhomarila/Downloads/tradingData/20192024'
+    folder_path = '/home/juhomarila/Downloads/tradingData/uudet'
     symbol_list = []
     for filename in os.listdir(folder_path):
         if filename.endswith(".csv"):
@@ -66,14 +60,15 @@ def process_csv_data(request):
     # train_machine_learning_model()
     # train_machine_learning_model_future_values()
     for i in range(len(symbol_list)):
-        calculate_BBP8(symbol_list[i], finnish_stock_daily, True, 3)
-        calculate_sd(symbol_list[i], finnish_stock_daily, True, 3)
+        daterange = 14
+        calculate_BBP8(symbol_list[i], finnish_stock_daily, True, 3, daterange)
+        calculate_sd(symbol_list[i], finnish_stock_daily, True, 3, daterange)
         # calculate_rsi(symbol_list[i], finnish_stock_daily, True, 3)
         # calculate_rsi(symbol_list[i], finnish_stock_daily, True, 5)
-        calculate_macd(symbol_list[i], finnish_stock_daily, True, 3)
+        calculate_macd(symbol_list[i], finnish_stock_daily, True, 3, daterange)
         # calculate_obv(symbol_list[i], finnish_stock_daily, True)
         # calculate_adl(symbol_list[i], finnish_stock_daily, True)
-        calculate_adx(symbol_list[i], finnish_stock_daily, True, 3)
+        calculate_adx(symbol_list[i], finnish_stock_daily, True, 3, daterange)
         # calculate_ema(symbol_list[i], finnish_stock_daily, True, 3)
     # Oikeinpäin
     #     calculate_BBP8(symbol_list[i], finnish_stock_daily, False, 8)
@@ -184,41 +179,70 @@ def get_daily_data(request):
                                                    volume=stock_data['volume'])
     return HttpResponse(status=201)
 
-
-def index(request):
-    q = request.GET.get('q', None)
-    if q:
-        return HttpResponse('Haista vittu')
-    else:
-        return HttpResponse("Hello, world. You're at the polls index.")
-
-
 def visualize(request):
     ticker = request.GET.get('t')
     investment = int(request.GET.get('i'))
+    expenses = int(request.GET.get('e'))
+    startdate = request.GET.get('sd')
+    enddate = request.GET.get('ed')
     if ticker and investment:
         stock_symbol = ticker
         buy_sell_points = optimal_buy_sell_points.objects.filter(symbol=stock_symbol).order_by('stock__date')
-        visualize_stock_and_investment(stock_symbol, buy_sell_points, investment)
+        visualize_stock_and_investment(stock_symbol, buy_sell_points, investment, expenses, startdate, enddate)
     else:
         # Assuming you have already retrieved the buy_sell_points for a specific stock symbol
         stock_symbol = 'HARVIA'
         buy_sell_points = optimal_buy_sell_points.objects.filter(symbol=stock_symbol).order_by('stock__date')
-        visualize_stock_and_investment(stock_symbol, buy_sell_points, 100)
+        visualize_stock_and_investment(stock_symbol, buy_sell_points, 100, 3)
     # Convert the plot to a PNG image
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png')
     buffer.seek(0)
 
-    # Embed the image in the HTTP response
-    response = HttpResponse(buffer, content_type='image/png')
-    return response
+    # Convert the image buffer to base64 format
+    image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+    plt.close()  # Close the plot to free up memory
+
+    return render(request, 'visualization.html', {'img': image_base64})
 
 
 def index(request):
-    symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
+    symbol_list = finnish_stock_daily.objects.values('symbol').distinct().order_by('symbol')
     return render(request, 'index.html', {'symbol_list': symbol_list})
 
 
 def settings(request, symbol):
-    return render(request, 'settings.html', {'stock_symbol': symbol})
+    # Query the start date for the given symbol
+    start_date = finnish_stock_daily.objects.filter(symbol=symbol).aggregate(start_date=Min('date'))
+
+    # Query the max date for the given symbol
+    max_date = finnish_stock_daily.objects.filter(symbol=symbol).aggregate(max_date=Max('date'))
+    context = {
+        'stock_symbol': symbol,
+        'start_date': start_date['start_date'],  # Accessing the start_date value from the dictionary
+        'max_date': max_date['max_date']  # Accessing the max_date value from the dictionary
+    }
+    return render(request, 'settings.html', context)
+
+
+def signals_page(request, symbol):
+    thirty_days_ago = datetime.datetime.now() - datetime.timedelta(days=30)
+    half_year_ago = datetime.datetime.now() - datetime.timedelta(days=183)
+    if symbol == 'ALL':
+        buy_sell_signals = optimal_buy_sell_points.objects.filter(stock__date__gte=thirty_days_ago).order_by(
+            '-stock__date')
+    else:
+        buy_sell_signals = optimal_buy_sell_points.objects.filter(symbol=symbol, stock__date__gte=half_year_ago).order_by('-stock__date')
+
+    # Subquery to fetch the date five rows ahead for each signal
+    five_rows_ahead_date = finnish_stock_daily.objects.filter(
+        symbol=OuterRef('symbol'),
+        date__gt=OuterRef('stock__date')
+    ).order_by('date').values('date')[4:5]
+
+    # Annotate the buy_sell_signals queryset with the five_rows_ahead_date subquery
+    buy_sell_signals = buy_sell_signals.annotate(
+        date_five_rows_ahead=Subquery(five_rows_ahead_date)
+    )
+
+    return render(request, 'signals_page.html', {'signals': buy_sell_signals})
