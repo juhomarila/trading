@@ -1,5 +1,26 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<div class="container d-flex flex-column align-items-center">
     <img src="data:image/png;base64, {{ img }}" alt="Plotti" width="auto" height="auto">
+    <h1>Osto-/Myyntitransaktiot</h1>
+    <table class="table">
+        <thead>
+        <tr>
+            <th scope="col">Päivä</th>
+            <th scope="col">Hinta</th>
+            <th scope="col">Tapahtuma</th>
+        </tr>
+        </thead>
+        <tbody class="table-group-divider">
+        {% for date, close_price, signal in buy_sell_dates %}
+        <tr>
+            <td>{{ date }}</td>
+            <td>{{ close_price }}</td>
+            <td>{{ signal }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
 {% endblock %}

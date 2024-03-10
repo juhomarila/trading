@@ -68,6 +68,41 @@ def process_csv_data(request):
     return HttpResponse(status=201)
 
 
+def process_sp500_data(request):
+    print(os.getcwd())
+    folder_path = '/home/juhomarila/Downloads/tradingData/SP500'
+    symbol_list = []
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".csv"):
+            symbol = filename.split("-")[0]
+            symbol_list.append(symbol)
+            with open(os.path.join(folder_path, filename), newline='', encoding='utf-8') as csvfile:
+                reader = csv.reader(csvfile, delimiter=',')
+                counter = 0
+                for row in reader:
+                    if counter < 1:
+                        counter += 1
+                        continue
+                    if (len(row[0]) == 0 or len(row[1]) == 0 or len(row[2]) == 0 or len(row[3]) == 0
+                            or len(row[4]) == 0):
+                        continue
+                    else:
+                        date = datetime.datetime.strptime(row[0], "%m/%d/%Y").date()
+                        open_price = float(row[1].replace(",", ""))
+                        high_price = float(row[2].replace(",", ""))
+                        low_price = float(row[3].replace(",", ""))
+                        closing_price = float(row[4].replace(",", ""))
+
+                        print(symbol, date, open_price, high_price, low_price, closing_price)
+                        if not finnish_stock_daily.objects.filter(symbol=symbol, date=date).exists():
+                            finnish_stock_daily.objects.create(symbol=symbol, date=date, bid=0, ask=0,
+                                                               open=open_price, high=high_price,
+                                                               low=low_price, close=closing_price,
+                                                               average=0, volume=0,
+                                                               turnover=0, trades=0)
+    return HttpResponse(status=201)
+
+
 def find_buy_sell_points(request):
     symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
     for symbol_data in symbol_list:
@@ -116,20 +151,22 @@ def get_daily_data(request):
                                                    volume=stock_data['volume'])
     return HttpResponse(status=201)
 
+
 def visualize(request):
     ticker = request.GET.get('t')
     investment = int(request.GET.get('i'))
     expenses = int(request.GET.get('e'))
     startdate = request.GET.get('sd')
     enddate = request.GET.get('ed')
+    buy_sell_dates = []
     if ticker and investment:
         stock_symbol = ticker
         buy_sell_points = optimal_buy_sell_points.objects.filter(symbol=stock_symbol).order_by('stock__date')
-        visualize_stock_and_investment(stock_symbol, buy_sell_points, investment, expenses, startdate, enddate)
+        buy_sell_dates = visualize_stock_and_investment(stock_symbol, buy_sell_points, investment, expenses, startdate, enddate)
     else:
         stock_symbol = 'HARVIA'
         buy_sell_points = optimal_buy_sell_points.objects.filter(symbol=stock_symbol).order_by('stock__date')
-        visualize_stock_and_investment(stock_symbol, buy_sell_points, 100, 3)
+        buy_sell_dates = visualize_stock_and_investment(stock_symbol, buy_sell_points, 100, 3)
 
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png')
@@ -138,11 +175,16 @@ def visualize(request):
     image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
     plt.close()
 
-    return render(request, 'visualization.html', {'img': image_base64})
+    context = {
+        'img': image_base64,
+        'buy_sell_dates': buy_sell_dates
+    }
+
+    return render(request, 'visualization.html', context)
 
 
 def index(request):
-    symbol_list = finnish_stock_daily.objects.values('symbol').distinct().order_by('symbol')
+    symbol_list = finnish_stock_daily.objects.values('symbol').distinct().order_by('symbol').exclude(symbol='S&P500')
     return render(request, 'index.html', {'symbol_list': symbol_list})
 
 
