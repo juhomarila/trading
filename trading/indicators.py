@@ -55,7 +55,6 @@ def calculate_obv(stock_symbol, model, reverse):
     df['obv'] = df['obv'].cumsum()
     for index, row in df.iterrows():
         stock = model.objects.get(date=row['date'], symbol=stock_symbol)
-        print("OBV " + stock_symbol, row['obv'], row['date'])
         if reverse:
             if not reverse_signals.objects.filter(stock__id=index, obv__isnull=False).exists():
                 reverse_signals_obj = reverse_signals.objects.filter(stock=stock, symbol=stock_symbol).first()
@@ -85,7 +84,6 @@ def calculate_adl(stock_symbol, model, reverse):
     df['adl'] = df['adl'].cumsum()
     for index, row in df.iterrows():
         stock = model.objects.get(date=row['date'], symbol=stock_symbol)
-        print("ADL " + stock_symbol, row['adl'], row['date'])
         if reverse:
             if not reverse_signals.objects.filter(stock__id=index, adl__isnull=False).exists():
                 reverse_signals_obj = reverse_signals.objects.filter(stock=stock, symbol=stock_symbol).first()
@@ -127,7 +125,6 @@ def calculate_adx(stock_symbol, model, reverse, period, daterange):
     df['ADX'] = df['DX'].rolling(period).mean()
     for index, row in df.iterrows():
         stock = model.objects.get(date=row['date'], symbol=stock_symbol)
-        print("ADX " + stock_symbol, row['ADX'], period, row['date'])
         if reverse:
             reverse_signals_obj = reverse_signals.objects.filter(stock=stock, symbol=stock_symbol).first()
             if reverse_signals_obj:
@@ -158,7 +155,6 @@ def calculate_aroon(stock_symbol, model, period=14):
         ll = min(low_prices)
         aroon_up = ((period - (high_prices.index(hh))) / period) * 100
         aroon_down = ((period - (low_prices.index(ll))) / period) * 100
-        print("AROON " + stock.symbol, aroon_up, aroon_down, stock.date)
         if not signals.objects.filter(stock__id=i, aroon_up__isnull=False, aroon_down__isnull=False).exists():
             signals_obj = signals.objects.filter(stock=stock, symbol=stock_symbol).first()
             if signals_obj:
@@ -179,7 +175,6 @@ def calculate_ema(stock_symbol, model, reverse, period):
             exp_mov_av = stock_data[i].close
         else:
             exp_mov_av = (stock_data[i].close * k) + (exp_mov_av * (1 - k))
-        print('EMA: ', period, exp_mov_av, stock_data[i].date)
         if period == 5:
             reverse_signals_obj = reverse_signals.objects.filter(stock=stock_data[i], symbol=stock_symbol).first()
             if reverse_signals_obj:
@@ -250,7 +245,6 @@ def calculate_macd(stock_symbol, model, reverse, period, daterange):
                         signals_obj.macd_signal = 0
                         signals_obj.save()
                     continue
-        print("MACD " + stock_symbol, macd_values[i], signal_line[i], stock.date)
         if reverse:
             if not reverse_signals.objects.filter(stock__id=i, macd__isnull=False, macd_signal__isnull=False).exists():
                 reverse_signals_obj = reverse_signals.objects.filter(stock=stock, symbol=stock_symbol).first()
@@ -293,7 +287,6 @@ def calculate_rsi(stock_symbol, model, reverse, period):
             rsi = 100 - (100 / (1 + rs))
             rsi_val = rsi
             rsi_values.append(rsi_val)
-        print("RSI ", period, stock_symbol, rsi_val, stock_data[i].date)
         if period == 5:
             reverse_signals_obj = reverse_signals.objects.filter(stock=stock_data[i], symbol=stock_symbol).first()
             if reverse_signals_obj:
@@ -347,14 +340,12 @@ def calculate_sd(stock_symbol, model, reverse, period, daterange):
         else:
             std_dev = row['std_dev']
         if reverse:
-            print('SD: ', std_dev, stock.date)
             reverse_signals_obj = reverse_signals.objects.filter(stock=stock_data[i], symbol=stock_symbol).first()
             if reverse_signals_obj:
                 reverse_signals_obj.std_dev = std_dev
                 reverse_signals_obj.save()
         else:
             if not signals.objects.filter(stock__id=i, std_dev__isnull=False).exists():
-                print('SD: ', std_dev, stock.date)
                 signals_obj = signals.objects.filter(stock=stock_data[i], symbol=stock_symbol).first()
                 if signals_obj:
                     signals_obj.std_dev = std_dev
@@ -363,14 +354,6 @@ def calculate_sd(stock_symbol, model, reverse, period, daterange):
 
 def find_optimum_buy_sell_points(stock_symbol, period=14):
     stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('date')
-    investment = 100
-    compare_investment = 100
-    compare_stocks = 0
-    first_buy = False
-    stocks = 0
-    sell_count = 0
-    buy_count = 0
-    last_command = 'SELL'
     for i in range(period, len(stock_data)):
         stock_daily = stock_data[i]
         try:
@@ -378,37 +361,17 @@ def find_optimum_buy_sell_points(stock_symbol, period=14):
         except ObjectDoesNotExist:
             continue
         close_val = stock_data[i].close
-        # open_val = stock_data[i].open
-        # date = stock_data[i].date
         prev_close_val = stock_data[i - period].close
         if indicators.adx > 22 \
                 and indicators.macd * 5 < indicators.macd_signal and close_val > prev_close_val - indicators.std_dev:
             if not optimal_buy_sell_points.objects.filter(stock=stock_daily).exists():
                 optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                        command="BUY", value=close_val)
-            if last_command != "BUY":
-                buy_count += 1
-                stocks = investment / close_val
-                investment = 0
-                last_command = "BUY"
-                if not first_buy:
-                    first_buy = True
-                    compare_stocks = compare_investment / close_val
         elif indicators.adx < 22 \
                 and indicators.macd * 1.1 > indicators.macd_signal and close_val < prev_close_val + indicators.std_dev:
             if not optimal_buy_sell_points.objects.filter(stock=stock_daily).exists():
                 optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                        command="SELL", value=close_val)
-            if last_command != "SELL":
-                sell_count += 1
-                investment = stocks * close_val
-                stocks = 0
-                last_command = "SELL"
-    if investment != 0:
-        return investment - 100, (compare_stocks * stock_data[len(stock_data) - 1].close) - 100
-    else:
-        return (stocks * stock_data[len(stock_data) - 1].close) - 100, \
-               (compare_stocks * stock_data[len(stock_data) - 1].close) - 100
 
 
 def calculate_profit_loss(stock_symbol, initial_investment):
@@ -425,12 +388,8 @@ def calculate_profit_loss(stock_symbol, initial_investment):
                 'date')
             if queryset.count() >= 5:
                 five_rows_later_stock = queryset[4]
-                # print("ARVO KYMMENEN PÄIVÄÄ MYÖHEMMIN: ", str(ten_rows_later_stock.close) + " PÄIVÄ: ",
-                #      ten_rows_later_stock.date)
             else:
                 five_rows_later_stock = None
-                # print("ARVO KYMMENEN PÄIVÄÄ MYÖHEMMIN: ", str(point.value) + " PÄIVÄ: ",
-                #      point.stock.date)
             if investment > 0:
                 stocks = (investment - 3) / five_rows_later_stock.close if five_rows_later_stock is not None \
                     else (investment - 3) / point.value
@@ -450,14 +409,11 @@ def calculate_profit_loss(stock_symbol, initial_investment):
             investment = (stocks * five_rows_later_stock.close) - 3 if five_rows_later_stock is not None \
                 else (stocks * point.value) - 3
             stocks = 0
-            # print("INVESTOINTI: ", str(int(investment)) + " INVESTOITI VIIKKOA MYÖHEMMIN: ", str(int(investment_10_days_later)))
             last_command = 'SELL'
 
     # Calculate profit/loss based on remaining investment and current stock price
     current_stock_price = finnish_stock_daily.objects.filter(symbol=stock_symbol).latest('date').close
     total_value = investment if investment != 0 else stocks * current_stock_price
     profit_loss = total_value
-    print("OSAKE: " + stock_symbol + " TULOS: " + str(profit_loss) + " INVESTOINTEJA LISÄTTY " + str(investment_added))
-    # print("TULOS 10 PÄIVÄÄ MYHÖEMMIN: " + str(profit_loss_10_days_later) + " INVESTOINTEJA LISÄTTY " + str(investment_10_days_later_added))
     winning = True if profit_loss - initial_investment > 0 else False
     return profit_loss, investment_added, winning
