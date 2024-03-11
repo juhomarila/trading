@@ -2,6 +2,8 @@ from datetime import datetime, timedelta
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import numpy as np
+import pandas as pd
 
 from trading.models import finnish_stock_daily, optimal_buy_sell_points
 
@@ -135,14 +137,88 @@ def visualize_stock_and_investment(stock_symbol, buy_sell_points, initial_invest
 
 
 def create_strategy(investment, start_date, end_date, chosen_stocks, chosen_provider):
-    if chosen_provider == 'Osuuspankki':  # case osuuspankki
-        expenses = 5
-    else:  # Case nordnet
-        expenses = 5
+    # if chosen_provider == 'Osuuspankki':  # case osuuspankki
+    #     expenses = 5
+    # else:  # Case nordnet
+    #     expenses = 5
+    expenses = 5
     stock_data = finnish_stock_daily.objects.filter(symbol__in=chosen_stocks,
                                                     date__range=(start_date, end_date)).order_by('date')
     sp_500_benchmark_data = finnish_stock_daily.objects.filter(symbol='S&P500', date__range=(
         start_date, end_date)).order_by('date')
+    signal_data = optimal_buy_sell_points.objects.filter(symbol__in=chosen_stocks)
+    stock_data_list = list(stock_data.values('date', 'symbol', 'close'))  # Extract only necessary fields
+    signal_data_list = list(signal_data.values('stock__date', 'symbol', 'command'))
+
+    stock_df = pd.DataFrame(stock_data_list)
+    signal_df = pd.DataFrame(signal_data_list)
+
+    stock_df = stock_df.rename(columns={'close': 'price'})
+    signal_df = signal_df.rename(columns={'stock__date': 'date'})
+
+    merged_df = pd.merge(stock_df, signal_df, on=['date', 'symbol'], how='left')
+
+    merged_df['command'] = merged_df.groupby('symbol')['command'].ffill()
+
+    merged_df['command'] = merged_df['command'].fillna('SELL')
+
+    merged_df['date'] = pd.to_datetime(merged_df['date'])
+    merged_df['command_shifted'] = merged_df.groupby('symbol')['command'].shift(5)
+    merged_df['prev_command'] = merged_df.groupby('symbol')['command_shifted'].shift(1)
+
+    stocks = {stock_symbol: 0 for stock_symbol in chosen_stocks}
+    investment_by_stock = {stock_symbol: int(investment) for stock_symbol in chosen_stocks}
+    transactions = []
+    for index, row in merged_df.iterrows():
+        stock_symbol = row['symbol']
+        price = row['price']
+        command = row['command_shifted']
+        prev_command = row['prev_command']
+        date = row['date']
+
+        if prev_command == 'NaN':
+            investment_by_stock[stock_symbol] = int(investment)
+        if command == 'BUY' and (prev_command == 'NaN' or prev_command == 'SELL'):
+            stocks[stock_symbol] = (investment_by_stock[stock_symbol] - expenses) / price
+            investment_by_stock[stock_symbol] -= expenses
+            transactions.append((date, stock_symbol, price, command, round(sum(investment_by_stock.values()), 2)))
+        elif command == 'BUY' and prev_command == 'BUY':
+            investment_by_stock[stock_symbol] = stocks[stock_symbol] * price
+        elif command == 'SELL' and prev_command == 'BUY':
+            investment_by_stock[stock_symbol] = stocks[stock_symbol] * price - expenses
+            stocks[stock_symbol] = 0
+            transactions.append((date, stock_symbol, price, command, round(sum(investment_by_stock.values()), 2)))
+
+        merged_df.at[index, 'investment'] = investment_by_stock[stock_symbol]
+        merged_df.at[index, 'stocks'] = stocks[stock_symbol]
+        prev_investment = merged_df.groupby('symbol')['investment'].shift(1).ffill()
+        investment_growth = ((merged_df['investment'] - prev_investment) / prev_investment) * 100
+        merged_df['growth'] = investment_growth
+
+    initial_investment_total = int(investment) * len(chosen_stocks)
+    combined_investments = merged_df.groupby('date').agg(total_investments=('investment', 'sum')).reset_index()
+
+    missing_data = []
+    for date in combined_investments['date']:
+        investments_count = merged_df[merged_df['date'] == date]['investment'].count()
+        if investments_count < len(chosen_stocks):
+            for stock_symbol in chosen_stocks:
+                if merged_df[(merged_df['date'] == date) & (merged_df['symbol'] == stock_symbol)].empty:
+                    filtered_df = merged_df[(merged_df['symbol'] == stock_symbol) & (merged_df['date'] < date)]
+                    if not filtered_df.empty:
+                        previous_investment = filtered_df['investment'].iloc[-1]
+                        missing_data.append({'date': date, 'symbol': stock_symbol, 'investment': previous_investment})
+
+    if missing_data:
+        missing_df = pd.DataFrame(missing_data)
+        merged_df = pd.concat([merged_df, missing_df], ignore_index=True)
+
+    combined_investments = merged_df.groupby('date').agg(total_investments=('investment', 'sum')).reset_index()
+    combined_investments['growth'] = ((combined_investments[
+                                           'total_investments'] - initial_investment_total) / initial_investment_total) * 100
+    combined_investments = combined_investments.sort_values(by='date')
+
+    final_investment_total = combined_investments['total_investments'].iloc[-1]
 
     sp_500_dates = [sp_500.date for sp_500 in sp_500_benchmark_data]
     sp_500_values = [sp_500.close for sp_500 in sp_500_benchmark_data]
@@ -150,163 +226,12 @@ def create_strategy(investment, start_date, end_date, chosen_stocks, chosen_prov
     sp_500_changes = [(100 * (sp_500_values[i] - initial_sp_500_value) / initial_sp_500_value) for i in
                       range(1, len(sp_500_values))]
 
-    sell_counter = 0
-    buy_counter = 0
-    initial_investment = int(investment)
-    investment_by_stock = {stock_symbol: initial_investment for stock_symbol in chosen_stocks}
-    investments = {}
-    stocks = {}
-    for i in range(len(stock_data)):
-        signal = optimal_buy_sell_points.objects.filter(stock=stock_data[i]).first()
-        if signal:
-            previous_signal = optimal_buy_sell_points.objects.filter(
-                stock__symbol=signal.stock.symbol,
-                stock__date__lt=signal.stock.date,
-            ).order_by('-stock__date').first()
-            if signal.command == 'BUY' and (
-                    (previous_signal and previous_signal.command == 'SELL') or previous_signal is None):
-                buy_counter += 1
-                queryset = finnish_stock_daily.objects.filter(symbol=signal.symbol,
-                                                              date__gt=signal.stock.date).order_by(
-                    'date')
-                if queryset.count() >= 5:
-                    last_buy_stock = queryset[4]
-                    last_buy_date = last_buy_stock.date
-                else:
-                    last_buy_stock = None
-                    last_buy_date = signal.stock.date
-                if int(investment_by_stock[signal.symbol]) > 0:
-                    stocks[signal.symbol] = (int(investment_by_stock[
-                                                     signal.symbol]) - expenses) / last_buy_stock.close if last_buy_stock is not None \
-                        else (int(investment_by_stock[signal.symbol]) - expenses) / signal.value
-                    if signal.symbol in investments:
-                        investments[signal.symbol].append((last_buy_date, stocks[signal.symbol], 'BUY'))
-                    else:
-                        investments[signal.symbol] = [(last_buy_date, stocks[signal.symbol], 'BUY')]
-                    investment_by_stock[signal.symbol] = 0
-                else:
-                    stocks[signal.symbol] = (int(investment_by_stock[
-                                                     signal.symbol]) - expenses) / last_buy_stock.close if last_buy_stock is not None \
-                        else (int(investment_by_stock[signal.symbol]) - expenses) / signal.value
-                    if signal.symbol in investments:
-                        investments[signal.symbol].append((last_buy_date, stocks[signal.symbol], 'BUY'))
-                    else:
-                        investments[signal.symbol] = [(last_buy_date, stocks[signal.symbol], 'BUY')]
-
-            elif signal.command == 'SELL' and previous_signal and previous_signal.command == 'BUY':
-                sell_counter += 1
-                queryset = finnish_stock_daily.objects.filter(symbol=signal.symbol,
-                                                              date__gt=signal.stock.date).order_by(
-                    'date')
-                if queryset.count() >= 5:
-                    last_sell_stock = queryset[4]
-                    last_sell_date = last_sell_stock.date
-                else:
-                    last_sell_stock = None
-                    last_sell_date = signal.stock.date
-                investment_by_stock[signal.symbol] = (stocks[
-                                                          signal.symbol] * last_sell_stock.close) - expenses if last_sell_stock is not None \
-                    else (stocks[signal.symbol] * signal.value) - expenses
-                stocks[signal.symbol] = 0
-                if signal.symbol in investments:
-                    investments[signal.symbol].append((last_sell_date, investment_by_stock[signal.symbol], 'SELL'))
-                else:
-                    investments[signal.symbol] = [(last_sell_date, investment_by_stock[signal.symbol], 'SELL')]
-
-            else:
-                continue
-        else:
-            continue
-
-    all_stock_dates = []
-
-    for stock_symbol in chosen_stocks:
-        stock_dates = finnish_stock_daily.objects.filter(
-            symbol=stock_symbol,
-            date__range=(start_date, end_date)
-        ).values_list('date', flat=True)
-
-        all_stock_dates.extend(stock_dates)
-
-    all_stock_dates = sorted(list(set(all_stock_dates)))
-
-    all_investment_changes = {}
-    last_signals = {symbol: ('SELL', initial_investment) for symbol in chosen_stocks}
-
-    symbols_with_investments = {date: set() for date in all_stock_dates}
-
-    for symbol, investments_list in investments.items():
-        for investment_data in investments_list:
-            investment_date, _, _ = investment_data
-            symbols_with_investments[investment_date].add(symbol)
-
-    for date in all_stock_dates:
-        total_investment_for_date = 0
-        for symbol in chosen_stocks:
-            if symbol in symbols_with_investments[date]:
-                for investment_data in investments.get(symbol, []):
-                    investment_date, investment_value_or_stocks, signal = investment_data
-                    if investment_date == date:
-                        if signal == 'SELL':
-                            last_signals[symbol] = (signal, investment_value_or_stocks)
-                            investment_value = investment_value_or_stocks
-                        else:
-                            investment_value = None
-                            previous_date = date
-                            days_to_subtract = 1
-                            last_signals[symbol] = (signal, investment_value_or_stocks)
-                            try:
-                                stock_close_price = stock_data.filter(date=date, symbol=symbol).first().close
-                            except AttributeError:
-                                stock_close_price = 0
-                                print(f"Warning: No stock data found for {symbol} on {date}")
-                            if stock_close_price == 0:
-                                while investment_value is None and days_to_subtract <= 5:
-                                    previous_date -= timedelta(days=1)
-                                    investment_value = all_investment_changes.get(previous_date)
-                                    days_to_subtract += 1
-                            else:
-                                investment_value = investment_value_or_stocks * stock_close_price
-                        total_investment_for_date += investment_value
-            else:
-                last_signal, stocks = last_signals[symbol]
-                if last_signal == 'BUY':
-                    investment_value = None
-                    previous_date = date
-                    days_to_subtract = 1
-                    try:
-                        stock_close_price = stock_data.filter(date=date, symbol=symbol).first().close
-                    except AttributeError:
-                        stock_close_price = 0
-                        print(f"Warning: No stock data found for {symbol} on {date}")
-                    if stock_close_price == 0:
-                        while investment_value is None and days_to_subtract <= 5:
-                            previous_date -= timedelta(days=1)
-                            investment_value = all_investment_changes.get(previous_date)
-                            days_to_subtract += 1
-                    else:
-                        investment_value = stocks * stock_close_price
-                    total_investment_for_date += investment_value
-                else:
-                    investment_value = stocks
-                    total_investment_for_date += investment_value
-
-        all_investment_changes[date] = total_investment_for_date
-    all_investment_dates = sorted(all_investment_changes.keys())
-    all_investment_values = [all_investment_changes[date] for date in all_investment_dates]
-
-    initial_investment_total = initial_investment * len(chosen_stocks)
-    all_investment_changes_percentage = [
-        (100 * (all_investment_values[i] - initial_investment_total) / initial_investment_total) for i in
-        range(1, len(all_investment_values))]
-
-    dates_for_investment = [mdates.date2num(date) for date in all_investment_dates[1:]]
-
     dates = [mdates.date2num(date) for date in sp_500_dates[1:]]
 
     plt.figure(figsize=(16, 8))
-    plt.plot(dates_for_investment, all_investment_changes_percentage, label='Investment Value Change (%)', color='blue')
     plt.plot(dates, sp_500_changes, label='SP&500 Value Change (%)', color='yellow')
+    plt.plot(combined_investments['date'], combined_investments['growth'],
+             label='Combined Investments Value Change (%)', color='blue')
     plt.grid(True, linestyle='--', color='gray', alpha=0.5)
     plt.xticks(rotation=45)
     plt.gca().xaxis.set_major_locator(plt.MultipleLocator(100))
@@ -317,4 +242,4 @@ def create_strategy(investment, start_date, end_date, chosen_stocks, chosen_prov
     plt.legend()
     plt.show()
 
-    return sell_counter + buy_counter, investments
+    return transactions, initial_investment_total, round(final_investment_total, 2)
