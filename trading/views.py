@@ -161,7 +161,8 @@ def visualize(request):
     if ticker and investment:
         stock_symbol = ticker
         buy_sell_points = optimal_buy_sell_points.objects.filter(symbol=stock_symbol).order_by('stock__date')
-        buy_sell_dates = visualize_stock_and_investment(stock_symbol, buy_sell_points, investment, expenses, startdate, enddate)
+        buy_sell_dates = visualize_stock_and_investment(stock_symbol, buy_sell_points, investment, expenses, startdate,
+                                                        enddate)
 
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png')
@@ -202,7 +203,7 @@ def signals_page(request, symbol):
         buy_sell_signals = optimal_buy_sell_points.objects.filter(stock__date__gte=thirty_days_ago).order_by(
             '-stock__date')
     else:
-        #buy_sell_signals = optimal_buy_sell_points.objects.filter(symbol=symbol, stock__date__gte=half_year_ago).order_by('-stock__date')
+        # buy_sell_signals = optimal_buy_sell_points.objects.filter(symbol=symbol, stock__date__gte=half_year_ago).order_by('-stock__date')
         buy_sell_signals = optimal_buy_sell_points.objects.filter(symbol=symbol).order_by(
             '-stock__date')
 
@@ -239,7 +240,9 @@ def created_strategy(request):
         chosen_provider = request.POST.get('provider')
 
         buffer = io.BytesIO()
-        joku, investments = create_strategy(investment, start_date, end_date, chosen_stocks, chosen_provider)
+        transactions, initial_investment_total, final_investment_total = create_strategy(investment, start_date,
+                                                                                         end_date, chosen_stocks,
+                                                                                         chosen_provider)
         plt.savefig(buffer, format='png')
         buffer.seek(0)
         image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
@@ -251,11 +254,11 @@ def created_strategy(request):
             'end_date': end_date,
             'chosen_stocks': chosen_stocks,
             'chosen_provider': chosen_provider,
-            'joku': joku,
-            'investements': investments,
             'img': image_base64,
+            'transactions': transactions,
+            'initial_investment_total': initial_investment_total,
+            'final_investment_total': final_investment_total,
         }
         return render(request, 'createdstrategy.html', context)
     else:
         return redirect('index')
-

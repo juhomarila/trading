@@ -2,14 +2,36 @@
 
 {% block content %}
 <div class="container d-flex flex-column align-items-center">
-    <h2>Created Strategy</h2>
-    <p>Investment: {{ investment }}</p>
-    <p>Start Date: {{ start_date }}</p>
-    <p>End Date: {{ end_date }}</p>
-    <p>Chosen Stocks: {{ chosen_stocks }}</p>
-    <p>Chosen Provider: {{ chosen_provider }}</p>
-    <p>Perkele: {{ joku }}</p>
+    <p>Investoinnin yhteissumma: {{ initial_investment_total }}</p>
+    <p>Alkupäivä: {{ start_date }}</p>
+    <p>Loppupäivä: {{ end_date }}</p>
+    <p>Valitut osakkeet: {{ chosen_stocks }}</p>
+    <p>Valittu palveluntarjoaja: {{ chosen_provider }}</p>
+    <p>Transaktioita: {{ transactions|length }}</p>
+    <p>Sijoitusten summa lopussa (ml. alkupääoma): {{ final_investment_total }} </p>
     <img src="data:image/png;base64, {{ img }}" alt="Plotti" width="auto" height="auto">
+    <table class="table">
+        <thead>
+        <tr>
+            <th scope="col">Päivä</th>
+            <th scope="col">Osake</th>
+            <th scope="col">Hinta</th>
+            <th scope="col">Tapahtuma</th>
+            <th scope="col">Sijoitusten arvo</th>
+        </tr>
+        </thead>
+        <tbody class="table-group-divider">
+        {% for date, symbol, price, command, value in transactions %}
+        <tr>
+            <td>{{ date }}</td>
+            <td>{{ symbol }}</td>
+            <td>{{ price }}</td>
+            <td>{{ command }}</td>
+            <td>{{ value }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
 </div>
 
 {% endblock %}
