@@ -17,4 +17,6 @@ urlpatterns = [
     path('settings/<str:symbol>/', views.settings, name='settings'),
     path('visualize/', views.visualize, name='visualize'),
     path('signals/<str:symbol>/', views.signals_page, name='signals_page'),
+    path('strategy/', views.strategy, name='strategy'),
+    path('createdstrategy/', views.created_strategy, name='created_strategy'),
 ]

@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container d-flex flex-column align-items-center">
+    <h2>Created Strategy</h2>
+    <p>Investment: {{ investment }}</p>
+    <p>Start Date: {{ start_date }}</p>
+    <p>End Date: {{ end_date }}</p>
+    <p>Chosen Stocks: {{ chosen_stocks }}</p>
+    <p>Chosen Provider: {{ chosen_provider }}</p>
+    <p>Perkele: {{ joku }}</p>
+    <img src="data:image/png;base64, {{ img }}" alt="Plotti" width="auto" height="auto">
+</div>
+
+{% endblock %}
+
+

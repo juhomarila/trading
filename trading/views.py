@@ -7,14 +7,14 @@ import io
 
 from django.db.models import Min, Max, OuterRef, Subquery
 from django.http import HttpResponse
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from yahoofinancials import YahooFinancials
 
 # from .machinelearning import train_machine_learning_model_future_values, train_machine_learning_model
 from .models import signals, finnish_stock_daily, optimal_buy_sell_points
 from .indicators import calculate_adx, calculate_rsi, calculate_aroon, calculate_macd, \
     calculate_BBP8, calculate_sd, find_optimum_buy_sell_points, calculate_profit_loss
-from .visualization import visualize_stock_and_investment
+from .visualization import visualize_stock_and_investment, create_strategy
 
 
 def process_csv_data(request):
@@ -158,15 +158,10 @@ def visualize(request):
     expenses = int(request.GET.get('e'))
     startdate = request.GET.get('sd')
     enddate = request.GET.get('ed')
-    buy_sell_dates = []
     if ticker and investment:
         stock_symbol = ticker
         buy_sell_points = optimal_buy_sell_points.objects.filter(symbol=stock_symbol).order_by('stock__date')
         buy_sell_dates = visualize_stock_and_investment(stock_symbol, buy_sell_points, investment, expenses, startdate, enddate)
-    else:
-        stock_symbol = 'HARVIA'
-        buy_sell_points = optimal_buy_sell_points.objects.filter(symbol=stock_symbol).order_by('stock__date')
-        buy_sell_dates = visualize_stock_and_investment(stock_symbol, buy_sell_points, 100, 3)
 
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png')
@@ -221,3 +216,46 @@ def signals_page(request, symbol):
     )
 
     return render(request, 'signals_page.html', {'signals': buy_sell_signals})
+
+
+def strategy(request):
+    symbol_list = finnish_stock_daily.objects.values('symbol').distinct().order_by('symbol').exclude(symbol='S&P500')
+    start_date = finnish_stock_daily.objects.aggregate(start_date=Min('date'))
+    max_date = finnish_stock_daily.objects.aggregate(max_date=Max('date'))
+    context = {
+        'symbol_list': symbol_list,
+        'start_date': start_date['start_date'],
+        'max_date': max_date['max_date']
+    }
+    return render(request, 'strategy.html', context)
+
+
+def created_strategy(request):
+    if request.method == 'POST':
+        investment = request.POST.get('investment')
+        start_date = request.POST.get('startdate')
+        end_date = request.POST.get('enddate')
+        chosen_stocks = request.POST.getlist('symbols')
+        chosen_provider = request.POST.get('provider')
+
+        buffer = io.BytesIO()
+        joku, investments = create_strategy(investment, start_date, end_date, chosen_stocks, chosen_provider)
+        plt.savefig(buffer, format='png')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+        plt.close()
+
+        context = {
+            'investment': investment,
+            'start_date': start_date,
+            'end_date': end_date,
+            'chosen_stocks': chosen_stocks,
+            'chosen_provider': chosen_provider,
+            'joku': joku,
+            'investements': investments,
+            'img': image_base64,
+        }
+        return render(request, 'createdstrategy.html', context)
+    else:
+        return redirect('index')
+

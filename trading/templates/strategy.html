@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container d-flex flex-column align-items-center">
+    <h2>Strategian asetukset:</h2>
+<form action="{% url 'created_strategy' %}" method="post" class="text-center">
+    {% csrf_token %}
+    <div class="input-group mb-3">
+        <span class="input-group-text">Sijoitettava rahamäärä per osake:</span>
+        <input type="number" id="investment" name="investment" class="form-control"
+               placeholder="Anna rahamäärä..." required>
+    </div>
+    <div class="input-group mb-3">
+        <span class="input-group-text">Valitse päivämääräväli:</span>
+        <input type="text" class="form-control datepicker" id="startdate" name="startdate" placeholder="Valitse alkupäivä"
+               required>
+        <input type="text" class="form-control datepicker" id="enddate" name="enddate" placeholder="Valitse loppupäivä"
+               required>
+        <button type="button" class="btn btn-outline-secondary" onclick="fillDates()">Maksimi aikäväli</button>
+    </div>
+    <div class="input-group mb-3">
+        <span class="input-group-text">Valitse osakkeet:</span>
+        <div class="form-check">
+            {% for symbol in symbol_list %}
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="{{ symbol.symbol }}" name="symbols"
+                       value="{{ symbol.symbol }}">
+                <label class="form-check-label" for="{{ symbol.symbol }}">{{ symbol.symbol }}</label>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="input-group mb-3">
+        <span class="input-group-text">Valitse palveluntarjoaja:</span>
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="provider" id="op_radio" value="Osuuspankki">
+            <label class="form-check-label" for="op_radio">Osuuspankki</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="provider" id="nordnet_radio" value="Nordnet">
+            <label class="form-check-label" for="nordnet_radio">Nordnet</label>
+        </div>
+    </div>
+    <button type="submit" class="btn btn-outline-secondary">Luo Strategia</button>
+</form>
+
+</div>
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/js/bootstrap-datepicker.min.js"></script>
+
+<script>
+    function fillDates() {
+        var start_date = new Date("{{ start_date }}");
+        var max_date = new Date("{{ max_date }}");
+
+        $('#startdate').datepicker('setDate', start_date);
+        $('#enddate').datepicker('setDate', max_date);
+    }
+    // Wait for the document to be ready
+    $(document).ready(function () {
+        // Get the start date and end date values passed from the view
+        var start_date = new Date("{{ start_date }}");
+        var max_date = new Date("{{ max_date }}");
+
+        // Initialize Bootstrap Datepicker for date inputs
+        $('.datepicker').datepicker({
+            format: 'yyyy-mm-dd', // Set the desired date format
+            autoclose: true, // Automatically close the datepicker when a date is selected
+            startDate: start_date,
+            endDate: max_date
+        });
+    });
+</script>
+{% endblock %}
