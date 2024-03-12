@@ -19,8 +19,16 @@ def calculate_BBP8(stock_symbol, model, reverse, period, daterange):
 
     for i in range(len(stock_data)):
         if i < period:
-            # Skip calculation for the initial period
-            continue
+            if reverse:
+                reverse_signal, _ = reverse_signals.objects.get_or_create(stock=stock_data[i], symbol=stock_symbol)
+                reverse_signal.bbp8 = 0
+                reverse_signal.save()
+                continue
+            else:
+                signal, _ = signals.objects.get_or_create(stock=stock_data[i], symbol=stock_symbol)
+                signal.bbp8 = 0
+                signal.save()
+                continue
 
         close_prices = [stock.close for stock in stock_data[i - period:i]]
         upper_band = max(close_prices)
@@ -30,7 +38,6 @@ def calculate_BBP8(stock_symbol, model, reverse, period, daterange):
             BBP8 = (stock_data[i].close - lower_band) / (upper_band - lower_band)
         else:
             BBP8 = 0
-
         # Check if the entry already exists before updating or creating it
         if reverse:
             reverse_signal, _ = reverse_signals.objects.get_or_create(stock=stock_data[i], symbol=stock_symbol)

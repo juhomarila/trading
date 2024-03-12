@@ -15,6 +15,9 @@ from .models import signals, finnish_stock_daily, optimal_buy_sell_points
 from .indicators import calculate_adx, calculate_rsi, calculate_aroon, calculate_macd, \
     calculate_BBP8, calculate_sd, find_optimum_buy_sell_points, calculate_profit_loss
 from .visualization import visualize_stock_and_investment, create_strategy
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 
 def process_csv_data(request):
@@ -115,40 +118,66 @@ def find_buy_sell_points(request):
 def process_daily_data(request):
     symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
     for i in range(len(symbol_list)):
-        calculate_adx(symbol_list[i]['symbol'], finnish_stock_daily, True)
-        calculate_aroon(symbol_list[i]['symbol'], finnish_stock_daily, True)
-        calculate_macd(symbol_list[i]['symbol'], finnish_stock_daily, True)
-        calculate_rsi(symbol_list[i]['symbol'], finnish_stock_daily, True)
+        print(symbol_list[i]['symbol'])
+        daterange = 10
+        calculate_BBP8(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
+        calculate_sd(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
+        calculate_macd(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
+        calculate_adx(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
     return HttpResponse(status=201)
 
 
 def get_daily_data(request):
     names = finnish_stock_daily.objects.values('symbol').distinct()
-    today = datetime.date.today()
-    tomorrow = datetime.date.today() + datetime.timedelta(days=1)
+    end_date = datetime.date.today()
+    start_date = end_date - datetime.timedelta(days=5)  # Fetch data for the last 5 days
     for i in range(len(names)):
+        print(names[i])
+        print(end_date)
+        print(start_date)
         if names[i]['symbol'] == 'NDA':
-            data = YahooFinancials(names[i]['symbol'] + '-FI.HE').get_historical_price_data(start_date=str(today),
-                                                                                            end_date=str(tomorrow),
-                                                                                            time_interval='daily')
-            stock_data = data[names[i]['symbol'] + '-FI.HE']['prices'][0]
-            if not finnish_stock_daily.objects.filter(symbol=names[i]['symbol'],
-                                                      date=stock_data['formatted_date']).exists():
-                finnish_stock_daily.objects.create(symbol=names[i]['symbol'], date=stock_data['formatted_date'],
-                                                   open=stock_data['open'], high=stock_data['high'],
-                                                   low=stock_data['low'], close=stock_data['close'],
-                                                   volume=stock_data['volume'])
+            data = YahooFinancials(names[i]['symbol'] + '-FI.HE').get_historical_price_data(
+                start_date=str(start_date),
+                end_date=str(end_date),
+                time_interval='daily'
+            )
+            stock_data = data[names[i]['symbol'] + '-FI.HE']['prices']
+            for day_data in stock_data:
+                if not finnish_stock_daily.objects.filter(symbol=names[i]['symbol'],
+                                                          date=day_data['formatted_date']).exists():
+                    finnish_stock_daily.objects.create(symbol=names[i]['symbol'], date=day_data['formatted_date'],
+                                                       open=day_data['open'], high=day_data['high'],
+                                                       low=day_data['low'], close=day_data['close'],
+                                                       volume=day_data['volume'])
+        elif names[i]['symbol'] == 'S&P500':
+            symbol = '^GSPC'
+            data = YahooFinancials(symbol).get_historical_price_data(
+                start_date=str(start_date),
+                end_date=str(end_date),
+                time_interval='daily'
+            )
+            stock_data = data[symbol]['prices']
+            for day_data in stock_data:
+                if not finnish_stock_daily.objects.filter(symbol=names[i]['symbol'],
+                                                          date=day_data['formatted_date']).exists():
+                    finnish_stock_daily.objects.create(symbol=names[i]['symbol'], date=day_data['formatted_date'],
+                                                       open=day_data['open'], high=day_data['high'],
+                                                       low=day_data['low'], close=day_data['close'],
+                                                       volume=0)
         else:
-            data = YahooFinancials(names[i]['symbol'] + '.HE').get_historical_price_data(start_date=str(today),
-                                                                                         end_date=str(tomorrow),
-                                                                                         time_interval='daily')
-            stock_data = data[names[i]['symbol'] + '.HE']['prices'][0]
-            if not finnish_stock_daily.objects.filter(symbol=names[i]['symbol'],
-                                                      date=stock_data['formatted_date']).exists():
-                finnish_stock_daily.objects.create(symbol=names[i]['symbol'], date=stock_data['formatted_date'],
-                                                   open=stock_data['open'], high=stock_data['high'],
-                                                   low=stock_data['low'], close=stock_data['close'],
-                                                   volume=stock_data['volume'])
+            data = YahooFinancials(names[i]['symbol'] + '.HE').get_historical_price_data(
+                start_date=str(start_date),
+                end_date=str(end_date),
+                time_interval='daily'
+            )
+            stock_data = data[names[i]['symbol'] + '.HE']['prices']
+            for day_data in stock_data:
+                if not finnish_stock_daily.objects.filter(symbol=names[i]['symbol'],
+                                                          date=day_data['formatted_date']).exists():
+                    finnish_stock_daily.objects.create(symbol=names[i]['symbol'], date=day_data['formatted_date'],
+                                                       open=day_data['open'], high=day_data['high'],
+                                                       low=day_data['low'], close=day_data['close'],
+                                                       volume=day_data['volume'])
     return HttpResponse(status=201)
 
 
@@ -181,6 +210,7 @@ def visualize(request):
 
 def index(request):
     symbol_list = finnish_stock_daily.objects.values('symbol').distinct().order_by('symbol').exclude(symbol='S&P500')
+    juujuu()
     return render(request, 'index.html', {'symbol_list': symbol_list})
 
 
