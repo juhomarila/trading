@@ -340,17 +340,15 @@ def calculate_sd(stock_symbol, model, reverse, period, daterange):
 
     # Iterate over the rows of the DataFrame and create a corresponding SD object
     for i, row in df.iterrows():
-        stock = model.objects.get(date=row['date'], symbol=stock_symbol)
         # If the row does not have a valid 'std_dev' value, use a default value
         if pd.isna(row['std_dev']):
             std_dev = 0.0
         else:
             std_dev = row['std_dev']
         if reverse:
-            reverse_signals_obj = reverse_signals.objects.filter(stock=stock_data[i], symbol=stock_symbol).first()
-            if reverse_signals_obj:
-                reverse_signals_obj.std_dev = std_dev
-                reverse_signals_obj.save()
+            reverse_signal, _ = reverse_signals.objects.get_or_create(stock=stock_data[i], symbol=stock_symbol)
+            reverse_signal.std_dev = std_dev
+            reverse_signal.save()
         else:
             if not signals.objects.filter(stock__id=i, std_dev__isnull=False).exists():
                 signals_obj = signals.objects.filter(stock=stock_data[i], symbol=stock_symbol).first()
@@ -359,26 +357,33 @@ def calculate_sd(stock_symbol, model, reverse, period, daterange):
                     signals_obj.save()
 
 
-def find_optimum_buy_sell_points(stock_symbol, period=14):
-    stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('date')
+def find_optimum_buy_sell_points(stock_symbol, daterange, period=14):
+    stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('date')[:daterange]
     for i in range(period, len(stock_data)):
         stock_daily = stock_data[i]
-        try:
-            indicators = reverse_signals.objects.get(stock=stock_daily)
-        except ObjectDoesNotExist:
+        if optimal_buy_sell_points.objects.filter(stock=stock_daily).exists():
             continue
-        close_val = stock_data[i].close
-        prev_close_val = stock_data[i - period].close
-        if indicators.adx > 22 \
-                and indicators.macd * 5 < indicators.macd_signal and close_val > prev_close_val - indicators.std_dev:
-            if not optimal_buy_sell_points.objects.filter(stock=stock_daily).exists():
+        else:
+            try:
+                indicators = reverse_signals.objects.get(stock=stock_daily)
+            except ObjectDoesNotExist:
+                continue
+            close_val = stock_data[i].close
+            prev_close_val = stock_data[i - period].close
+            prev_optimal_point = optimal_buy_sell_points.objects.filter(symbol=stock_symbol).order_by('-date').first()
+            if (indicators.adx > 22 and indicators.macd * 5 < indicators.macd_signal
+                    and close_val > prev_close_val - indicators.std_dev):
                 optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                        command="BUY", value=close_val)
-        elif indicators.adx < 22 \
-                and indicators.macd * 1.1 > indicators.macd_signal and close_val < prev_close_val + indicators.std_dev:
-            if not optimal_buy_sell_points.objects.filter(stock=stock_daily).exists():
+                if prev_optimal_point.command == 'SELL':
+                    message = f'BUY: {stock_daily}, @CLOSING {close_val}'
+            elif (indicators.adx < 22 and indicators.macd * 1.1 > indicators.macd_signal
+                  and close_val < prev_close_val + indicators.std_dev):
                 optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                        command="SELL", value=close_val)
+                if prev_optimal_point.command == 'BUY':
+                    print('MYY')
+                    # TODO WIP SEND EMAIL
 
 
 def calculate_profit_loss(stock_symbol, initial_investment):

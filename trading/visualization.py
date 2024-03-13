@@ -36,7 +36,7 @@ def visualize_stock_and_investment(stock_symbol, buy_sell_points, initial_invest
         index = stock_keys.index(point.stock.date)
         if (point.command == 'BUY' and last_command != 'BUY'
                 and search_start_date < point.stock.date < search_end_date):
-            if index + 6 < len(stock_keys):
+            if index + 5 < len(stock_keys):
                 last_buy_date = stock_keys[index + 5]
                 last_buy_stock = stock_data_dict[last_buy_date]
             else:
@@ -52,11 +52,13 @@ def visualize_stock_and_investment(stock_symbol, buy_sell_points, initial_invest
                     else (investment - expenses) / point.value
                 investments.append((last_buy_date, stocks, 'BUY'))
             buy_sell_dates.append(
-                (last_buy_date, last_buy_stock.close if last_buy_stock is not None else point.stock.close, 'BUY'))
+                (last_buy_date,
+                 round(last_buy_stock.close, 2) if last_buy_stock is not None else round(point.stock.close, 2),
+                 round(stocks * last_buy_stock.close if last_buy_stock is not None else point.stock.close, 2), 'BUY'))
             last_command = 'BUY'
         elif point.command == 'SELL' and last_command != 'SELL' \
                 and search_start_date < point.stock.date < search_end_date:
-            if index + 6 < len(stock_keys):
+            if index + 5 < len(stock_keys):
                 last_sell_date = stock_keys[index + 5]
                 last_sell_stock = stock_data_dict[last_sell_date]
             else:
@@ -68,7 +70,9 @@ def visualize_stock_and_investment(stock_symbol, buy_sell_points, initial_invest
             investments.append((last_sell_date, investment, 'SELL'))
             last_command = 'SELL'
             buy_sell_dates.append(
-                (last_sell_date, last_sell_stock.close if last_sell_stock is not None else point.stock.close, 'SELL'))
+                (last_sell_date,
+                 round(last_sell_stock.close, 2) if last_sell_stock is not None else round(point.stock.close, 2),
+                 round(investment, 2), 'SELL'))
 
     stock_changes = [(100 * (stock_values[i] - initial_stock_value) / initial_stock_value) for i in
                      range(1, len(stock_values))]
@@ -180,13 +184,15 @@ def create_strategy(investment, start_date, end_date, chosen_stocks, chosen_prov
         if command == 'BUY' and (prev_command == 'NaN' or prev_command == 'SELL'):
             stocks[stock_symbol] = (investment_by_stock[stock_symbol] - expenses) / price
             investment_by_stock[stock_symbol] -= expenses
-            transactions.append((date, stock_symbol, price, command, round(sum(investment_by_stock.values()), 2)))
+            transactions.append(
+                (date, stock_symbol, round(price, 2), command, round(sum(investment_by_stock.values()), 2)))
         elif command == 'BUY' and prev_command == 'BUY':
             investment_by_stock[stock_symbol] = stocks[stock_symbol] * price
         elif command == 'SELL' and prev_command == 'BUY':
             investment_by_stock[stock_symbol] = stocks[stock_symbol] * price - expenses
             stocks[stock_symbol] = 0
-            transactions.append((date, stock_symbol, price, command, round(sum(investment_by_stock.values()), 2)))
+            transactions.append(
+                (date, stock_symbol, round(price, 2), command, round(sum(investment_by_stock.values()), 2)))
 
         merged_df.at[index, 'investment'] = investment_by_stock[stock_symbol]
         merged_df.at[index, 'stocks'] = stocks[stock_symbol]

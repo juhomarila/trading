@@ -10,14 +10,18 @@
             <th scope="col">Päivä</th>
             <th scope="col">Hinta</th>
             <th scope="col">Tapahtuma</th>
+            <th scope="col">Sijoituksen arvo</th>
         </tr>
         </thead>
         <tbody class="table-group-divider">
-        {% for date, close_price, signal in buy_sell_dates %}
+        {% for date, close_price, investment, signal in buy_sell_dates %}
         <tr>
             <td>{{ date }}</td>
             <td>{{ close_price }}</td>
-            <td>{{ signal }}</td>
+            <td style="{% if signal == 'BUY' %}color:green{% elif signal == 'SELL' %}color:red{% endif %}">
+                {{ signal }}
+            </td>
+            <td>{{ investment }}</td>
         </tr>
         {% endfor %}
         </tbody>

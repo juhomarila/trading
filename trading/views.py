@@ -100,13 +100,15 @@ def process_csv_data(symbol, file, delimiter):
 
 
 def process_data(request):
+    symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
     if request.method == 'POST':
         func_name = request.POST.get('func_name')
+        symbol = request.POST.get('symbol')
         if func_name == 'bulk':
-            process_bulk_data()
+            process_bulk_data(symbol)
             return JsonResponse({'message': 'Massadatan prosessointi valmis'})
         elif func_name == 'buy_sell':
-            find_buy_sell_points()
+            find_buy_sell_points(symbol)
             return JsonResponse({'message': 'Osto/myynti pisteiden prosessointi valmis'})
         elif func_name == 'daily':
             process_daily_data()
@@ -114,29 +116,39 @@ def process_data(request):
         elif func_name == 'get_daily':
             get_daily_data()
             return JsonResponse({'message': 'Päivittäinen data haettu ja kirjoitettu kantaan'})
+        elif func_name == 'get_daily_buy_sell':
+            find_buy_sell_points_for_daily_data()
+            return JsonResponse({'message': 'Päivittäinen osto-/myyntipisteet kirjoitettu kantaan'})
         else:
             return JsonResponse({'message': 'Invalid request'}, status=400)
     elif request.method == 'GET':
-        return render(request, 'process_data.html')
+        return render(request, 'process_data.html', {'symbols': symbol_list})
 
 
-def process_bulk_data():
+def process_bulk_data(symbol):
+    print(symbol)
+    daterange = 36500  # For history as long as it goes
+    # calculate_BBP8(symbol, finnish_stock_daily, True, 3, daterange)
+    calculate_sd(symbol, finnish_stock_daily, True, 3, daterange)
+    calculate_macd(symbol, finnish_stock_daily, True, 3, daterange)
+    calculate_adx(symbol, finnish_stock_daily, True, 3, daterange)
+
+
+def find_buy_sell_points(symbol):
+    find_optimum_buy_sell_points(symbol, 36500, True)
+    print(symbol)
+
+
+def find_buy_sell_points_for_daily_data():
     symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
     for i in range(len(symbol_list)):
-        print(symbol_list[i])
-        daterange = 36500  # For history as long as it goes
-        calculate_BBP8(symbol_list[i], finnish_stock_daily, True, 3, daterange)
-        calculate_sd(symbol_list[i], finnish_stock_daily, True, 3, daterange)
-        calculate_macd(symbol_list[i], finnish_stock_daily, True, 3, daterange)
-        calculate_adx(symbol_list[i], finnish_stock_daily, True, 3, daterange)
+        find_optimum_buy_sell_points(symbol_list[i]['symbol'], 50, True)
+        print(symbol_list[i]['symbol'])
 
 
-def find_buy_sell_points():
-    symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
-    for symbol_data in symbol_list:
-        symbol = symbol_data['symbol']
-        find_optimum_buy_sell_points(symbol, True)
-        print(symbol)
+def find_buy_sell_points_for_daily_data_cronjob():
+    find_buy_sell_points_for_daily_data()
+    return HttpResponse(status=201)
 
 
 def process_daily_data():
@@ -148,6 +160,11 @@ def process_daily_data():
         calculate_sd(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
         calculate_macd(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
         calculate_adx(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
+
+
+def process_daily_data_cronjob(request):
+    process_daily_data()
+    return HttpResponse(status=201)
 
 
 def get_daily_data():
@@ -171,7 +188,8 @@ def get_daily_data():
                     finnish_stock_daily.objects.create(symbol=names[i]['symbol'], date=day_data['formatted_date'],
                                                        open=day_data['open'], high=day_data['high'],
                                                        low=day_data['low'], close=day_data['close'],
-                                                       volume=day_data['volume'])
+                                                       average=0, volume=day_data['volume'],
+                                                       turnover=0, trades=0, bid=0, ask=0)
         elif names[i]['symbol'] == 'S&P500':
             symbol = '^GSPC'
             data = YahooFinancials(symbol).get_historical_price_data(
@@ -186,7 +204,8 @@ def get_daily_data():
                     finnish_stock_daily.objects.create(symbol=names[i]['symbol'], date=day_data['formatted_date'],
                                                        open=day_data['open'], high=day_data['high'],
                                                        low=day_data['low'], close=day_data['close'],
-                                                       volume=0)
+                                                       average=0, volume=0, bid=0, ask=0,
+                                                       turnover=0, trades=0)
         else:
             data = YahooFinancials(names[i]['symbol'] + '.HE').get_historical_price_data(
                 start_date=str(start_date),
@@ -200,7 +219,13 @@ def get_daily_data():
                     finnish_stock_daily.objects.create(symbol=names[i]['symbol'], date=day_data['formatted_date'],
                                                        open=day_data['open'], high=day_data['high'],
                                                        low=day_data['low'], close=day_data['close'],
-                                                       volume=day_data['volume'])
+                                                       average=0, volume=day_data['volume'],
+                                                       turnover=0, trades=0, bid=0, ask=0)
+
+
+def get_daily_data_cronjob(request):
+    get_daily_data()
+    return HttpResponse(status=201)
 
 
 def visualize(request):
@@ -209,11 +234,13 @@ def visualize(request):
     expenses = int(request.GET.get('e'))
     startdate = request.GET.get('sd')
     enddate = request.GET.get('ed')
-    if ticker and investment:
+    if ticker and investment and expenses and startdate and enddate:
         stock_symbol = ticker
         buy_sell_points = optimal_buy_sell_points.objects.filter(symbol=stock_symbol).order_by('stock__date')
         buy_sell_dates = visualize_stock_and_investment(stock_symbol, buy_sell_points, investment, expenses, startdate,
                                                         enddate)
+    else:
+        return HttpResponse(status=404)
 
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png')

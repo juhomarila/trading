@@ -1,8 +1,7 @@
-from datetime import datetime
-
 from django.urls import path
 
 from . import views
+from . import emailprovider
 
 urlpatterns = [
     path('index', views.index, name='index'),
@@ -10,9 +9,9 @@ urlpatterns = [
     # path('getintradaydata', views.get_intraday_data_by_ticker, name='getintradaydata'),
     path('processcsvdata', views.process_csv_data, name='processcsvdata'),
     path('processbulkdata', views.process_bulk_data, name='processbulkdata'),
-    path('getdailydata', views.get_daily_data, name='getdailydata'),
-    path('processdailydata', views.process_daily_data, name='processdailydata'),
-    path('findbuysellpoints', views.find_buy_sell_points, name='findbuysellpoints'),
+    path('getdailydata/', views.get_daily_data_cronjob, name='getdailydata'),
+    path('processdailydata/', views.process_daily_data_cronjob, name='processdailydata'),
+    path('findbuysellpoints/', views.find_buy_sell_points_for_daily_data_cronjob, name='findbuysellpoints'),
     path('', views.index, name='index'),
     path('settings/<str:symbol>/', views.settings, name='settings'),
     path('visualize/', views.visualize, name='visualize'),
@@ -21,4 +20,5 @@ urlpatterns = [
     path('createdstrategy/', views.created_strategy, name='created_strategy'),
     path('upload-csv/', views.process_uploaded_csv, name='upload_csv'),
     path('process-data/', views.process_data, name='process_data'),
+    path('send-email/', emailprovider.send_email, name='send_email'),
 ]
