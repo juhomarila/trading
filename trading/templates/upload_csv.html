@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container d-flex flex-column align-items-center">
+    <h2>Valitse CSV-tiedostoja</h2>
+    <p>Nimessä on oltava osakkeen lyhenne, jonka perässä on -, esim: ELISA-jotain</p>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="csv_files">Valitse CSV-tiedostot:</label>
+            <input type="file" class="form-control-file" id="csv_files" name="csv_files" multiple>
+        </div>
+        <button type="submit" class="btn btn-primary">Lataa palvelimelle</button>
+    </form>
+</div>
+{% endblock %}

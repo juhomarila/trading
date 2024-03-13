@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Datan prosessointi</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script>
+        function processData(funcName) {
+            // Show spinner
+            $('#spinner').show();
+            // Disable all buttons
+            $('button').prop('disabled', true);
+            // Get CSRF token
+            var csrftoken = $("[name=csrfmiddlewaretoken]").val();
+            // Make AJAX request to the backend
+            $.ajax({
+                url: '/process-data/',
+                method: 'POST',
+                headers: {'X-CSRFToken': csrftoken},  // Include CSRF token in headers
+                data: {'func_name': funcName, 'csrfmiddlewaretoken': csrftoken},  // Include CSRF token in data
+                success: function(response) {
+                    // Hide spinner
+                    $('#spinner').hide();
+                    // Enable all buttons
+                    $('button').prop('disabled', false);
+                    alert(response.message);
+                },
+                error: function(xhr, status, error) {
+                    // Hide spinner
+                    $('#spinner').hide();
+                    // Enable all buttons
+                    $('button').prop('disabled', false);
+                    alert("Error occurred: " + error);
+                }
+            });
+        }
+    </script>
+</head>
+<body>
+    <div class="container mt-5">
+        {% csrf_token %}  <!-- Include CSRF token -->
+        <button class="btn btn-primary mr-2" onclick="processData('bulk')">Datan massaprosessointi</button>
+        <button class="btn btn-primary mr-2" onclick="processData('buy_sell')">Osta/Myy-signaalien massaprosessoiti</button>
+        <button class="btn btn-primary mr-2" onclick="processData('daily')">Päivittäisdatan prosessointi</button>
+        <button class="btn btn-primary" onclick="processData('get_daily')">Päivittäisdatan haku</button>
+    </div>
+    <div id="spinner" class="text-center" style="display: none;">Ladataan...</div>
+</body>
+</html>
+{% endblock %}

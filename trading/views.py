@@ -6,128 +6,151 @@ import matplotlib.pyplot as plt
 import io
 
 from django.db.models import Min, Max, OuterRef, Subquery
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect
 from yahoofinancials import YahooFinancials
+from io import StringIO
 
 # from .machinelearning import train_machine_learning_model_future_values, train_machine_learning_model
 from .models import signals, finnish_stock_daily, optimal_buy_sell_points
 from .indicators import calculate_adx, calculate_rsi, calculate_aroon, calculate_macd, \
     calculate_BBP8, calculate_sd, find_optimum_buy_sell_points, calculate_profit_loss
 from .visualization import visualize_stock_and_investment, create_strategy
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 
-def process_csv_data(request):
-    print(os.getcwd())
-    folder_path = '/home/juhomarila/Downloads/tradingData/uudet2'
-    symbol_list = []
-    for filename in os.listdir(folder_path):
-        if filename.endswith(".csv"):
-            symbol = filename.split("-")[0]
-            symbol_list.append(symbol)
-            with open(os.path.join(folder_path, filename), newline='', encoding='utf-8') as csvfile:
-                reader = csv.reader(csvfile, delimiter=';')
-                counter = 0
-                for row in reader:
-                    if counter < 2:
-                        counter += 1
-                        continue
-                    if (len(row[0]) == 0 or len(row[1]) == 0 or len(row[2]) == 0 or len(row[3]) == 0
-                            or len(row[4]) == 0 or len(row[5]) == 0 or len(row[6]) == 0 or len(row[7]) == 0
-                            or len(row[8]) == 0 or len(row[9]) == 0 or len(row[10]) == 0):
-                        continue
-                    else:
-                        date = datetime.datetime.strptime(row[0], '%Y-%m-%d').date()
-                        bid = float(row[1].replace(",", "."))
-                        ask = float(row[2].replace(",", "."))
-                        open_price = float(row[3].replace(",", "."))
-                        high_price = float(row[4].replace(",", "."))
-                        low_price = float(row[5].replace(",", "."))
-                        closing_price = float(row[6].replace(",", "."))
-                        average_price = float(row[7].replace(",", "."))
-                        total_volume = int(float(row[8].replace(",", ".")))
-                        turnover = float(row[9].replace(",", "."))
-                        trades = int(float(row[10].replace(",", ".")))
+def process_uploaded_csv(request):
+    if request.method == 'POST' and request.FILES.getlist('csv_files'):
+        # Get list of uploaded CSV files
+        csv_files = request.FILES.getlist('csv_files')
 
-                        print(symbol, date, bid, ask, open_price, high_price, low_price,
-                              closing_price, average_price, total_volume, turnover, trades)
-                        if not finnish_stock_daily.objects.filter(symbol=symbol, date=date).exists():
-                            finnish_stock_daily.objects.create(symbol=symbol, date=date, bid=bid, ask=ask,
-                                                               open=open_price, high=high_price,
-                                                               low=low_price, close=closing_price,
-                                                               average=average_price, volume=total_volume,
-                                                               turnover=turnover, trades=trades)
-    # train_machine_learning_model()
-    # train_machine_learning_model_future_values()
+        # Process each uploaded CSV file
+        for csv_file in csv_files:
+            if csv_file.name.endswith(".csv"):
+                symbol = csv_file.name.split("-")[0]
+                # Read the CSV file content
+                csv_content = csv_file.read().decode('utf-8')
+                # Create a file-like object from the CSV content
+                csv_content_file = StringIO(csv_content)
+                # Process CSV data and save to database
+                if symbol == 'S&P500':
+                    delimiter = ','
+                else:
+                    delimiter = ';'
+                process_csv_data(symbol, csv_content_file, delimiter)
+
+        return redirect('process_data')
+
+    return render(request, 'upload_csv.html')
+
+
+def process_csv_data(symbol, file, delimiter):
+    counter = 0
+    reader = csv.reader(file, delimiter=delimiter)
+    for row in reader:
+        if delimiter == ',':
+            if counter < 1:
+                counter += 1
+                continue
+            if (len(row[0]) == 0 or len(row[1]) == 0 or len(row[2]) == 0 or len(row[3]) == 0
+                    or len(row[4]) == 0):
+                continue
+            else:
+                date = datetime.datetime.strptime(row[0], "%m/%d/%Y").date()
+                open_price = float(row[1].replace(",", ""))
+                high_price = float(row[2].replace(",", ""))
+                low_price = float(row[3].replace(",", ""))
+                closing_price = float(row[4].replace(",", ""))
+
+                print(symbol, date, open_price, high_price, low_price, closing_price)
+                if not finnish_stock_daily.objects.filter(symbol=symbol, date=date).exists():
+                    finnish_stock_daily.objects.create(symbol=symbol, date=date, bid=0, ask=0,
+                                                       open=open_price, high=high_price,
+                                                       low=low_price, close=closing_price,
+                                                       average=0, volume=0,
+                                                       turnover=0, trades=0)
+        else:
+            if counter < 2:
+                counter += 1
+                continue
+            if (len(row[0]) == 0 or len(row[1]) == 0 or len(row[2]) == 0 or len(row[3]) == 0
+                    or len(row[4]) == 0 or len(row[5]) == 0 or len(row[6]) == 0 or len(row[7]) == 0
+                    or len(row[8]) == 0 or len(row[9]) == 0 or len(row[10]) == 0):
+                continue
+            else:
+                date = datetime.datetime.strptime(row[0], '%Y-%m-%d').date()
+                bid = float(row[1].replace(",", "."))
+                ask = float(row[2].replace(",", "."))
+                open_price = float(row[3].replace(",", "."))
+                high_price = float(row[4].replace(",", "."))
+                low_price = float(row[5].replace(",", "."))
+                closing_price = float(row[6].replace(",", "."))
+                average_price = float(row[7].replace(",", "."))
+                total_volume = int(float(row[8].replace(",", ".")))
+                turnover = float(row[9].replace(",", "."))
+                trades = int(float(row[10].replace(",", ".")))
+
+                print(symbol, date, bid, ask, open_price, high_price, low_price,
+                      closing_price, average_price, total_volume, turnover, trades)
+                if not finnish_stock_daily.objects.filter(symbol=symbol, date=date).exists():
+                    finnish_stock_daily.objects.create(symbol=symbol, date=date, bid=bid, ask=ask,
+                                                       open=open_price, high=high_price,
+                                                       low=low_price, close=closing_price,
+                                                       average=average_price, volume=total_volume,
+                                                       turnover=turnover, trades=trades)
+
+
+def process_data(request):
+    if request.method == 'POST':
+        func_name = request.POST.get('func_name')
+        if func_name == 'bulk':
+            process_bulk_data()
+            return JsonResponse({'message': 'Massadatan prosessointi valmis'})
+        elif func_name == 'buy_sell':
+            find_buy_sell_points()
+            return JsonResponse({'message': 'Osto/myynti pisteiden prosessointi valmis'})
+        elif func_name == 'daily':
+            process_daily_data()
+            return JsonResponse({'message': 'Päivittäisen uuden datan prosessointi valmis'})
+        elif func_name == 'get_daily':
+            get_daily_data()
+            return JsonResponse({'message': 'Päivittäinen data haettu ja kirjoitettu kantaan'})
+        else:
+            return JsonResponse({'message': 'Invalid request'}, status=400)
+    elif request.method == 'GET':
+        return render(request, 'process_data.html')
+
+
+def process_bulk_data():
+    symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
     for i in range(len(symbol_list)):
-        daterange = 3650
+        print(symbol_list[i])
+        daterange = 36500  # For history as long as it goes
         calculate_BBP8(symbol_list[i], finnish_stock_daily, True, 3, daterange)
         calculate_sd(symbol_list[i], finnish_stock_daily, True, 3, daterange)
         calculate_macd(symbol_list[i], finnish_stock_daily, True, 3, daterange)
         calculate_adx(symbol_list[i], finnish_stock_daily, True, 3, daterange)
-    return HttpResponse(status=201)
 
 
-def process_sp500_data(request):
-    print(os.getcwd())
-    folder_path = '/home/juhomarila/Downloads/tradingData/SP500'
-    symbol_list = []
-    for filename in os.listdir(folder_path):
-        if filename.endswith(".csv"):
-            symbol = filename.split("-")[0]
-            symbol_list.append(symbol)
-            with open(os.path.join(folder_path, filename), newline='', encoding='utf-8') as csvfile:
-                reader = csv.reader(csvfile, delimiter=',')
-                counter = 0
-                for row in reader:
-                    if counter < 1:
-                        counter += 1
-                        continue
-                    if (len(row[0]) == 0 or len(row[1]) == 0 or len(row[2]) == 0 or len(row[3]) == 0
-                            or len(row[4]) == 0):
-                        continue
-                    else:
-                        date = datetime.datetime.strptime(row[0], "%m/%d/%Y").date()
-                        open_price = float(row[1].replace(",", ""))
-                        high_price = float(row[2].replace(",", ""))
-                        low_price = float(row[3].replace(",", ""))
-                        closing_price = float(row[4].replace(",", ""))
-
-                        print(symbol, date, open_price, high_price, low_price, closing_price)
-                        if not finnish_stock_daily.objects.filter(symbol=symbol, date=date).exists():
-                            finnish_stock_daily.objects.create(symbol=symbol, date=date, bid=0, ask=0,
-                                                               open=open_price, high=high_price,
-                                                               low=low_price, close=closing_price,
-                                                               average=0, volume=0,
-                                                               turnover=0, trades=0)
-    return HttpResponse(status=201)
-
-
-def find_buy_sell_points(request):
+def find_buy_sell_points():
     symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
     for symbol_data in symbol_list:
         symbol = symbol_data['symbol']
         find_optimum_buy_sell_points(symbol, True)
         print(symbol)
-    return HttpResponse(status=201)
 
 
-def process_daily_data(request):
+def process_daily_data():
     symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
     for i in range(len(symbol_list)):
         print(symbol_list[i]['symbol'])
-        daterange = 10
+        daterange = 10  # for only 10 days, since data is new
         calculate_BBP8(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
         calculate_sd(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
         calculate_macd(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
         calculate_adx(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
-    return HttpResponse(status=201)
 
 
-def get_daily_data(request):
+def get_daily_data():
     names = finnish_stock_daily.objects.values('symbol').distinct()
     end_date = datetime.date.today()
     start_date = end_date - datetime.timedelta(days=5)  # Fetch data for the last 5 days
@@ -178,7 +201,6 @@ def get_daily_data(request):
                                                        open=day_data['open'], high=day_data['high'],
                                                        low=day_data['low'], close=day_data['close'],
                                                        volume=day_data['volume'])
-    return HttpResponse(status=201)
 
 
 def visualize(request):
@@ -210,7 +232,6 @@ def visualize(request):
 
 def index(request):
     symbol_list = finnish_stock_daily.objects.values('symbol').distinct().order_by('symbol').exclude(symbol='S&P500')
-    juujuu()
     return render(request, 'index.html', {'symbol_list': symbol_list})
 
 

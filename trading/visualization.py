@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-import numpy as np
 import pandas as pd
 
 from trading.models import finnish_stock_daily, optimal_buy_sell_points
