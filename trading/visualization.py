@@ -54,7 +54,7 @@ def visualize_stock_and_investment(stock_symbol, buy_sell_points, initial_invest
             buy_sell_dates.append(
                 (last_buy_date,
                  round(last_buy_stock.close, 2) if last_buy_stock is not None else round(point.stock.close, 2),
-                 round(stocks * last_buy_stock.close if last_buy_stock is not None else point.stock.close, 2), 'BUY'))
+                 round(stocks * last_buy_stock.close if last_buy_stock is not None else stocks * point.stock.close, 2), 'BUY'))
             last_command = 'BUY'
         elif point.command == 'SELL' and last_command != 'SELL' \
                 and search_start_date < point.stock.date < search_end_date:

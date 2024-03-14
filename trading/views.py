@@ -127,16 +127,25 @@ def process_data(request):
 
 def process_bulk_data(symbol):
     print(symbol)
-    daterange = 36500  # For history as long as it goes
+    daterange = 14  # For history as long as it goes
     # calculate_BBP8(symbol, finnish_stock_daily, True, 3, daterange)
-    calculate_sd(symbol, finnish_stock_daily, True, 3, daterange)
-    calculate_macd(symbol, finnish_stock_daily, True, 3, daterange)
-    calculate_adx(symbol, finnish_stock_daily, True, 3, daterange)
+    length = list(finnish_stock_daily.objects.filter(symbol=symbol))
+    for i in range(len(length)):
+        print(f"ITERAATIO: {i + 1}")
+        calculate_sd(symbol, finnish_stock_daily, True, 3, daterange + i)
+        calculate_macd(symbol, finnish_stock_daily, True, 3, daterange + i)
+        calculate_adx(symbol, finnish_stock_daily, True, 3, daterange + i)
+        find_optimum_buy_sell_points(symbol, daterange + i, True)
 
 
 def find_buy_sell_points(symbol):
-    find_optimum_buy_sell_points(symbol, 36500, True)
-    print(symbol)
+    daterange = 14  # For history as long as it goes
+    # calculate_BBP8(symbol, finnish_stock_daily, True, 3, daterange)
+    length = list(finnish_stock_daily.objects.filter(symbol=symbol))
+    for i in range(len(length)):
+        print(f"ITERAATIO: {i + 1}")
+        find_optimum_buy_sell_points(symbol, daterange + i, True)
+        print(symbol)
 
 
 def find_buy_sell_points_for_daily_data():
@@ -156,7 +165,7 @@ def process_daily_data():
     for i in range(len(symbol_list)):
         print(symbol_list[i]['symbol'])
         daterange = 10  # for only 10 days, since data is new
-        calculate_BBP8(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
+        # calculate_BBP8(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
         calculate_sd(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
         calculate_macd(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
         calculate_adx(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
