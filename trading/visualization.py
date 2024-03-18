@@ -9,14 +9,16 @@ from trading.models import finnish_stock_daily, optimal_buy_sell_points
 
 def visualize_stock_and_investment(stock_symbol, buy_sell_points, initial_investment, expenses, search_start_date,
                                    search_end_date):
+    first_buy_sell_date = buy_sell_points.order_by('stock__date').first().stock.date
+    print(f"PÄIVÄ: {first_buy_sell_date}")
     stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol,
-                                                    date__range=(search_start_date, search_end_date)).order_by('date')
+                                                    date__range=(first_buy_sell_date, search_end_date)).order_by('date')
     sp_500_benchmark_data = finnish_stock_daily.objects.filter(symbol='S&P500', date__range=(
-        search_start_date, search_end_date)).order_by('date')
-    dates = [stock.date for stock in stock_data]
-    stock_values = [stock.close for stock in stock_data]
-    sp_500_dates = [sp_500.date for sp_500 in sp_500_benchmark_data]
-    sp_500_values = [sp_500.close for sp_500 in sp_500_benchmark_data]
+        first_buy_sell_date, search_end_date)).order_by('date')
+    dates = [stock.date for stock in stock_data[5:]]
+    stock_values = [stock.close for stock in stock_data[5:]]
+    sp_500_dates = [sp_500.date for sp_500 in sp_500_benchmark_data[5:]]
+    sp_500_values = [sp_500.close for sp_500 in sp_500_benchmark_data[5:]]
 
     initial_stock_value = stock_values[0]
     initial_sp_500_value = sp_500_values[0]

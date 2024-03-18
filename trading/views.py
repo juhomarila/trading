@@ -14,7 +14,7 @@ from io import StringIO
 # from .machinelearning import train_machine_learning_model_future_values, train_machine_learning_model
 from .models import signals, finnish_stock_daily, optimal_buy_sell_points
 from .indicators import calculate_adx, calculate_rsi, calculate_aroon, calculate_macd, \
-    calculate_BBP8, calculate_sd, find_optimum_buy_sell_points, calculate_profit_loss
+    calculate_BBP8, calculate_sd, find_optimum_buy_sell_points, calculate_profit_loss, calculate_ema
 from .visualization import visualize_stock_and_investment, create_strategy
 
 
@@ -126,26 +126,30 @@ def process_data(request):
 
 
 def process_bulk_data(symbol):
-    print(symbol)
     daterange = 14  # For history as long as it goes
     # calculate_BBP8(symbol, finnish_stock_daily, True, 3, daterange)
-    length = list(finnish_stock_daily.objects.filter(symbol=symbol))
-    for i in range(len(length)):
-        print(f"ITERAATIO: {i + 1}")
-        calculate_sd(symbol, finnish_stock_daily, True, 3, daterange + i)
-        calculate_macd(symbol, finnish_stock_daily, True, 3, daterange + i)
-        calculate_adx(symbol, finnish_stock_daily, True, 3, daterange + i)
-        find_optimum_buy_sell_points(symbol, daterange + i, True)
+    stocks = finnish_stock_daily.objects.filter(symbol=symbol).order_by('date')
+    for i in range(len(stocks)):
+        print(f"ITERAATIO: {i + 1}, PÄIVÄ: {stocks[i].date} OSAKE: {symbol}")
+        calculate_aroon(symbol, i)
+        calculate_macd(symbol, finnish_stock_daily, False, 26, i)
+        calculate_sd(symbol, finnish_stock_daily, True, 3, i)
+        calculate_sd(symbol, finnish_stock_daily, False, 14, i)
+        calculate_ema(symbol, finnish_stock_daily, False, 20, i)
+        calculate_ema(symbol, finnish_stock_daily, False, 50, i)
+        calculate_ema(symbol, finnish_stock_daily, False, 100, i)
+        calculate_ema(symbol, finnish_stock_daily, False, 200, i)
+        calculate_rsi(symbol, finnish_stock_daily, False, 15, i)
+        calculate_adx(symbol, finnish_stock_daily, True, 3, i)
+        calculate_adx(symbol, finnish_stock_daily, False, 14, i)
+        find_optimum_buy_sell_points(symbol, i, False)
 
 
 def find_buy_sell_points(symbol):
-    daterange = 14  # For history as long as it goes
-    # calculate_BBP8(symbol, finnish_stock_daily, True, 3, daterange)
-    length = list(finnish_stock_daily.objects.filter(symbol=symbol))
-    for i in range(len(length)):
-        print(f"ITERAATIO: {i + 1}")
-        find_optimum_buy_sell_points(symbol, daterange + i, True)
-        print(symbol)
+    # daterange = 14  # For history as long as it goes
+    # # calculate_BBP8(symbol, finnish_stock_daily, True, 3, daterange)
+    find_optimum_buy_sell_points(symbol, 203, True)
+    print(symbol)
 
 
 def find_buy_sell_points_for_daily_data():
