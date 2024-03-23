@@ -2,6 +2,7 @@ import base64
 import datetime
 import multiprocessing
 import os
+import timeit
 import csv
 import matplotlib.pyplot as plt
 import io
@@ -134,24 +135,22 @@ def process_data(request):
 
 def simulation():
     buy_param_ranges = {
-        'adx_threshold': [15, 20, 25, 30],
-        # 'ema_periods': [20, 50, 100, 200],
-        # 'macd_thresholds': [0.0, 0.1, 0.2, 0.3, 0.4],
-        # 'aroon_up_thresholds': [40, 60, 80, 100],
-        # 'aroon_down_thresholds': [20, 40, 60],
-        'rsi_threshold': [5, 15, 25, 35, 45],
+        'adx_threshold': [34],
+        'aroon_up_thresholds': [56.5],
+        'aroon_down_thresholds': [44.5],
+        'rsi_threshold': [76.5],
+    }
+    sell_param_ranges = {
+        'adx_threshold': [57],
+        'aroon_up_thresholds': [55.5],
+        'aroon_down_thresholds': [73.5],
+        'rsi_threshold': [65],
     }
 
-    # Define ranges for sell parameters
-    sell_param_ranges = {
-        'adx_threshold': [15, 20, 25, 30],
-        # 'ema_periods': [20, 50, 100, 200],
-        # 'macd_thresholds': [-0.3, -0.2, -0.1, 0.0],
-        # 'aroon_up_thresholds': [40, 60, 80, 100],
-        # 'aroon_down_thresholds': [20, 40, 60],
-        'rsi_threshold': [45, 55, 65, 75, 85],
-    }
+    start = timeit.default_timer()
     best_buy_params, best_sell_params, best_profit = optimize_parameters(buy_param_ranges, sell_param_ranges)
+    end = timeit.default_timer()
+    print(f"Execution Time: {end - start}")
     print("Best Buy Parameters:", best_buy_params)
     print("Best Sell Parameters:", best_sell_params)
     print("Best Overall Profit:", best_profit)
@@ -163,7 +162,7 @@ def process_bulk_data(symbol):
     processes = []
     symbols = finnish_stock_daily.objects.values('symbol').distinct()
     for stock_symbol in symbols:
-        if stock_symbol['symbol'] != 'SP&500':
+        if stock_symbol['symbol'] != 'S&P500':
             p = multiprocessing.Process(target=multiprocess_data, args=(stock_symbol['symbol'],))
             processes.append(p)
             p.start()

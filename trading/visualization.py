@@ -190,9 +190,9 @@ def visualize_stock_and_investment(stock_symbol, buy_sell_points, initial_invest
     plt.plot(dates_smoothed, smoothed_ema50_values, label='EMA50', color='cyan')
     plt.plot(dates_smoothed, smoothed_ema100_values, label='EMA100', color='magenta')
     plt.plot(dates_smoothed, smoothed_ema200_values, label='EMA200', color='orange')
-    #plt.plot(dates_smoothed, smoothed_rsi14_values, label='RSI14', color='blue')
-    #plt.plot(dates_smoothed, smoothed_adx_values, label='ADX', color='black')
-    #plt.plot(dates_smoothed, smoothed_reverse_adx_values, label='REVERSE ADX', color='grey')
+    # plt.plot(dates_smoothed, smoothed_rsi14_values, label='RSI14', color='blue')
+    # plt.plot(dates_smoothed, smoothed_adx_values, label='ADX', color='black')
+    # plt.plot(dates_smoothed, smoothed_reverse_adx_values, label='REVERSE ADX', color='grey')
     plt.grid(True, linestyle='--', color='gray', alpha=0.5)
     plt.xticks(rotation=45)
     plt.gca().xaxis.set_major_locator(plt.MultipleLocator(100))
@@ -258,6 +258,10 @@ def create_strategy(investment, start_date, end_date, chosen_stocks, chosen_prov
     hold_stocks_buy_price = {stock_symbol: 0 for stock_symbol in chosen_stocks}
     hold_stocks_value = 0
     transactions = []
+
+    unique_years = set(stock.date.year for stock in stock_data)
+    dividend_by_stock = {stock.symbol: {year: 0 for year in unique_years} for stock in stock_data}
+
     for index, row in merged_df.iterrows():
         stock_symbol = row['symbol']
         price = row['price']
@@ -266,6 +270,10 @@ def create_strategy(investment, start_date, end_date, chosen_stocks, chosen_prov
         date = row['date']
         if prev_command == 'NaN':
             investment_by_stock[stock_symbol] = int(investment)
+        if date.month == 3 and dividend_by_stock[stock_symbol][date.year] == 0 and prev_command == 'BUY':
+            print(
+                f"INVESTMENT NOW: {investment_by_stock[stock_symbol] * 1.025}, DIVIDEND: {investment_by_stock[stock_symbol] * 0.025}, DATE: {date}, STOCK: {stock_symbol}")
+            dividend_by_stock[stock_symbol][date.year] = stocks[stock_symbol] * price * 0.025
         if command == 'BUY' and (prev_command == 'NaN' or prev_command == 'SELL'):
             stocks[stock_symbol] = (investment_by_stock[stock_symbol] - expenses) / price
             investment_by_stock[stock_symbol] -= expenses
@@ -277,6 +285,9 @@ def create_strategy(investment, start_date, end_date, chosen_stocks, chosen_prov
             investment_by_stock[stock_symbol] = stocks[stock_symbol] * price
         elif command == 'SELL' and prev_command == 'BUY':
             investment_by_stock[stock_symbol] = stocks[stock_symbol] * price - expenses
+            for year in range(first_buy_sell_stock.date.year, date.year):
+                dividend = dividend_by_stock[stock_symbol].pop(year, 0)
+                investment_by_stock[stock_symbol] += dividend
             stocks[stock_symbol] = 0
             transactions.append(
                 (date, stock_symbol, round(price, 2), command, round(sum(investment_by_stock.values()), 2)))
@@ -295,6 +306,9 @@ def create_strategy(investment, start_date, end_date, chosen_stocks, chosen_prov
                     f"OSAKE: {stock_symbol}, OSTOHINTA: {hold_stocks_buy_price[stock_symbol]}, OSAKKEITA: {hold_stocks}, INVESTOINTI: {hold_stocks * price}, NYKYHINTA: {price}")
             if stocks[stock_symbol] != 0:
                 investment_by_stock[stock_symbol] = stocks[stock_symbol] * price
+                for year in range(first_buy_sell_stock.date.year, date.year):
+                    dividend = dividend_by_stock[stock_symbol].pop(year, 0)
+                    investment_by_stock[stock_symbol] += dividend
 
     initial_investment_total = int(investment) * len(chosen_stocks)
     combined_investments = merged_df.groupby('date').agg(total_investments=('investment', 'sum')).reset_index()
@@ -352,4 +366,5 @@ def create_strategy(investment, start_date, end_date, chosen_stocks, chosen_prov
 
     return transactions, initial_investment_total, round(final_investment_total, 2), round(hold_stocks_value,
                                                                                            2), round(investment_growth,
-                                                                                            2), round(hold_investment_growth, 2)
+                                                                                                     2), round(
+        hold_investment_growth, 2)

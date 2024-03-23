@@ -357,21 +357,25 @@ def find_optimum_buy_sell_points(stock_symbol, daterange, alldata):
                     print("gaga")
                 else:
                     close_val = stock_daily.close
-                    prev_stock = finnish_stock_daily.objects.filter(symbol=stock_symbol,
-                                                                    date__lt=stock_daily.date).order_by(
-                        '-date').first()
-                    prev_indicator = signals.objects.filter(symbol=stock_symbol,
-                                                            stock__date__lt=stock_daily.date).order_by(
-                        '-stock__date').first()
-                    prev_close_val = prev_stock.close
-                    if indicator.adx > 20 and indicator.adx > prev_indicator.adx \
-                            and close_val > indicator.ema20 and close_val > indicator.ema50 \
-                            and close_val > indicator.ema100 and close_val > indicator.ema200:
+                    # prev_stock = finnish_stock_daily.objects.filter(symbol=stock_symbol,
+                    #                                                 date__lt=stock_daily.date).order_by(
+                    #     '-date').first()
+                    # prev_indicator = signals.objects.filter(symbol=stock_symbol,
+                    #                                         stock__date__lt=stock_daily.date).order_by(
+                    #     '-stock__date').first()
+                    # prev_close_val = prev_stock.close
+                    if indicator.adx > 34 \
+                            and indicator.rsi14 < 76.5 \
+                            and indicator.aroon_up > indicator.aroon_down \
+                            and indicator.aroon_up > 56.5 \
+                            and indicator.aroon_down < 44.5:
                         optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                                command="BUY", value=close_val)
-                    elif indicator.adx < 20 and indicator.adx < prev_indicator.adx \
-                            and close_val < indicator.ema20 and close_val < indicator.ema50 \
-                            and close_val < indicator.ema100 and close_val < indicator.ema200:
+                    elif indicator.adx < 57 \
+                            and indicator.rsi14 > 65 \
+                            and indicator.aroon_up < indicator.aroon_down \
+                            and indicator.aroon_up < 55.5 \
+                            and indicator.aroon_down > 73.5:
                         optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                                command="SELL", value=close_val)
     else:
