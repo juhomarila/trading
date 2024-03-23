@@ -1,6 +1,9 @@
 import itertools
 import multiprocessing
+from multiprocessing import Manager, Semaphore
 from trading.models import finnish_stock_daily, signals
+
+MAX_PROCESSES = 8
 
 
 def simulate_trading(stock_indicator_data, buy_condition_params, sell_condition_params):
@@ -12,7 +15,8 @@ def simulate_trading(stock_indicator_data, buy_condition_params, sell_condition_
         if i >= 186:
             # Buy condition using parameters from buy_condition_params
             if prev_command == 'SELL' \
-                    and stock_indicator_data[i].adx > buy_condition_params['adx_threshold'] \
+                    and buy_condition_params['adx_threshold'] < stock_indicator_data[i].adx < buy_condition_params[
+                'adx_high_threshold'] \
                     and stock_indicator_data[i].rsi14 < buy_condition_params['rsi_threshold'] \
                     and stock_indicator_data[i].aroon_up > stock_indicator_data[i].aroon_down \
                     and stock_indicator_data[i].aroon_up > buy_condition_params['aroon_up_thresholds'] \
@@ -30,7 +34,8 @@ def simulate_trading(stock_indicator_data, buy_condition_params, sell_condition_
                 prev_command = 'BUY'
 
             # Sell condition using parameters from sell_condition_params
-            elif (prev_command == 'BUY' and stock_indicator_data[i].adx < sell_condition_params['adx_threshold']
+            elif (prev_command == 'BUY' and sell_condition_params['adx_threshold'] > stock_indicator_data[i].adx >
+                  sell_condition_params['adx_low_threshold']
                   and stock_indicator_data[i].rsi14 > sell_condition_params['rsi_threshold']
                   and stock_indicator_data[i].aroon_up < stock_indicator_data[i].aroon_down
                   and stock_indicator_data[i].aroon_up < sell_condition_params['aroon_up_thresholds']
@@ -60,6 +65,9 @@ def optimize_parameters(buy_param_ranges, sell_param_ranges):
     # Generate combinations of buy and sell parameters
     buy_param_combinations = itertools.product(*buy_param_ranges.values())
 
+    manager = Manager()
+    semaphore = Semaphore(MAX_PROCESSES)
+
     processes = []
     stock_indicator_data = signals.objects.all().order_by('stock__date')
     symbols = finnish_stock_daily.objects.values('symbol').distinct()
@@ -67,11 +75,11 @@ def optimize_parameters(buy_param_ranges, sell_param_ranges):
         sell_param_combinations = itertools.product(*sell_param_ranges.values())
         for sell_params in sell_param_combinations:
             print(f"OSTOPARAMETRIT: {buy_params}, MYYNTIPARAMETRIT: {sell_params}")
-            p = multiprocessing.Process(target=evaluate_params, args=(stock_indicator_data, symbols,
-                                                                      buy_params, sell_params, best_profit,
-                                                                      best_buy_params, best_sell_params,
-                                                                      buy_param_ranges,
-                                                                      sell_param_ranges))
+            p = multiprocessing.Process(target=worker, args=(semaphore, stock_indicator_data, symbols,
+                                                             buy_params, sell_params, best_profit,
+                                                             best_buy_params, best_sell_params,
+                                                             buy_param_ranges,
+                                                             sell_param_ranges))
             processes.append(p)
             p.start()
 
@@ -107,3 +115,13 @@ def evaluate_stock(stock_indicator_data, buy_params, sell_params, total_profit, 
                               dict(zip(sell_param_ranges.keys(), sell_params)))
     with total_profit.get_lock():
         total_profit.value += profit
+
+
+def worker(semaphore, stock_indicator_data, symbols, buy_params, sell_params, best_profit, best_buy_params,
+           best_sell_params, buy_param_ranges, sell_param_ranges):
+    semaphore.acquire()
+    try:
+        evaluate_params(stock_indicator_data, symbols, buy_params, sell_params, best_profit, best_buy_params,
+                        best_sell_params, buy_param_ranges, sell_param_ranges)
+    finally:
+        semaphore.release()

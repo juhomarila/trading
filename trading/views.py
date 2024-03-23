@@ -134,18 +134,62 @@ def process_data(request):
 
 
 def simulation():
+    # buy_param_ranges = {
+    #     'adx_threshold': [34, 35],
+    #     'adx_high_threshold': [74, 75],
+    #     'aroon_up_thresholds': [56.5, 57.5],
+    #     'aroon_down_thresholds': [44.5, 45.5],
+    #     'rsi_threshold': [76.5, 77.5],
+    # }
+    # sell_param_ranges = {
+    #     'adx_threshold': [55, 56],
+    #     'adx_low_threshold': [14, 15],
+    #     'aroon_up_thresholds': [55.5, 56.5],
+    #     'aroon_down_thresholds': [68.5, 69.5],
+    #     'rsi_threshold': [65, 66],
+    # }
+    # buy_param_ranges = {
+    #     'adx_threshold': [34],
+    #     'adx_high_threshold': [74.5, 75.5],
+    #     'aroon_up_thresholds': [56.5, 57.5],
+    #     'aroon_down_thresholds': [44.5, 45.5],
+    #     'rsi_threshold': [76.5],
+    # }
+    # sell_param_ranges = {
+    #     'adx_threshold': [55, 56],
+    #     'adx_low_threshold': [15.5],
+    #     'aroon_up_thresholds': [55.5],
+    #     'aroon_down_thresholds': [68.5, 69.5],
+    #     'rsi_threshold': [65],
+    # }
+
     buy_param_ranges = {
         'adx_threshold': [34],
-        'aroon_up_thresholds': [56.5],
+        'adx_high_threshold': [74.5],
+        'aroon_up_thresholds': [57.5],
         'aroon_down_thresholds': [44.5],
         'rsi_threshold': [76.5],
     }
     sell_param_ranges = {
-        'adx_threshold': [57],
+        'adx_threshold': [56],
+        'adx_low_threshold': [15.5],
         'aroon_up_thresholds': [55.5],
-        'aroon_down_thresholds': [73.5],
+        'aroon_down_thresholds': [68.5],
         'rsi_threshold': [65],
     }
+
+    # buy_param_ranges = {
+    #     'adx_threshold': [34],
+    #     'aroon_up_thresholds': [56.5],
+    #     'aroon_down_thresholds': [44.5],
+    #     'rsi_threshold': [76.5],
+    # }
+    # sell_param_ranges = {
+    #     'adx_threshold': [57],
+    #     'aroon_up_thresholds': [55.5],
+    #     'aroon_down_thresholds': [73.5],
+    #     'rsi_threshold': [65],
+    # }
 
     start = timeit.default_timer()
     best_buy_params, best_sell_params, best_profit = optimize_parameters(buy_param_ranges, sell_param_ranges)
