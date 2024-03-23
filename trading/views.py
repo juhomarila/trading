@@ -1,5 +1,6 @@
 import base64
 import datetime
+import multiprocessing
 import os
 import csv
 import matplotlib.pyplot as plt
@@ -8,6 +9,8 @@ import io
 from django.db.models import Min, Max, OuterRef, Subquery
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect
+import django
+from django.db import connection
 from yahoofinancials import YahooFinancials
 from io import StringIO
 
@@ -15,6 +18,7 @@ from io import StringIO
 from .models import signals, finnish_stock_daily, optimal_buy_sell_points
 from .indicators import calculate_adx, calculate_rsi, calculate_aroon, calculate_macd, \
     calculate_BBP8, calculate_sd, find_optimum_buy_sell_points, calculate_profit_loss, calculate_ema
+from .simulation import optimize_parameters
 from .visualization import visualize_stock_and_investment, create_strategy
 
 
@@ -100,7 +104,7 @@ def process_csv_data(symbol, file, delimiter):
 
 
 def process_data(request):
-    symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
+    symbol_list = finnish_stock_daily.objects.values('symbol').order_by('symbol').distinct()
     if request.method == 'POST':
         func_name = request.POST.get('func_name')
         symbol = request.POST.get('symbol')
@@ -119,15 +123,58 @@ def process_data(request):
         elif func_name == 'get_daily_buy_sell':
             find_buy_sell_points_for_daily_data()
             return JsonResponse({'message': 'Päivittäinen osto-/myyntipisteet kirjoitettu kantaan'})
+        elif func_name == 'simulate':
+            simulation()
+            return JsonResponse({'message': 'Simuloitu'})
         else:
             return JsonResponse({'message': 'Invalid request'}, status=400)
     elif request.method == 'GET':
         return render(request, 'process_data.html', {'symbols': symbol_list})
 
 
+def simulation():
+    buy_param_ranges = {
+        'adx_threshold': [15, 20, 25, 30],
+        # 'ema_periods': [20, 50, 100, 200],
+        # 'macd_thresholds': [0.0, 0.1, 0.2, 0.3, 0.4],
+        # 'aroon_up_thresholds': [40, 60, 80, 100],
+        # 'aroon_down_thresholds': [20, 40, 60],
+        'rsi_threshold': [5, 15, 25, 35, 45],
+    }
+
+    # Define ranges for sell parameters
+    sell_param_ranges = {
+        'adx_threshold': [15, 20, 25, 30],
+        # 'ema_periods': [20, 50, 100, 200],
+        # 'macd_thresholds': [-0.3, -0.2, -0.1, 0.0],
+        # 'aroon_up_thresholds': [40, 60, 80, 100],
+        # 'aroon_down_thresholds': [20, 40, 60],
+        'rsi_threshold': [45, 55, 65, 75, 85],
+    }
+    best_buy_params, best_sell_params, best_profit = optimize_parameters(buy_param_ranges, sell_param_ranges)
+    print("Best Buy Parameters:", best_buy_params)
+    print("Best Sell Parameters:", best_sell_params)
+    print("Best Overall Profit:", best_profit)
+
+
 def process_bulk_data(symbol):
     daterange = 14  # For history as long as it goes
     # calculate_BBP8(symbol, finnish_stock_daily, True, 3, daterange)
+    processes = []
+    symbols = finnish_stock_daily.objects.values('symbol').distinct()
+    for stock_symbol in symbols:
+        if stock_symbol['symbol'] != 'SP&500':
+            p = multiprocessing.Process(target=multiprocess_data, args=(stock_symbol['symbol'],))
+            processes.append(p)
+            p.start()
+
+    for process in processes:
+        process.join()
+
+
+def multiprocess_data(symbol):
+    django.setup()
+    connection.close()
     stocks = finnish_stock_daily.objects.filter(symbol=symbol).order_by('date')
     for i in range(len(stocks)):
         print(f"ITERAATIO: {i + 1}, PÄIVÄ: {stocks[i].date} OSAKE: {symbol}")
@@ -146,10 +193,22 @@ def process_bulk_data(symbol):
 
 
 def find_buy_sell_points(symbol):
+    processes = []
+    symbols = signals.objects.values('symbol').distinct()
+    for stock_symbol in symbols:
+        print(f"SYMBOL: {stock_symbol['symbol']}")
+        p = multiprocessing.Process(target=find_optimum_buy_sell_points, args=(stock_symbol['symbol'], 203, True))
+        processes.append(p)
+        p.start()
+
+    for process in processes:
+        process.join()
     # daterange = 14  # For history as long as it goes
     # # calculate_BBP8(symbol, finnish_stock_daily, True, 3, daterange)
-    find_optimum_buy_sell_points(symbol, 203, True)
-    print(symbol)
+
+    # for i in range(len(symbols)):
+    #     find_optimum_buy_sell_points(symbols[i]['symbol'], 203, True)
+    #     print(symbols[i]['symbol'])
 
 
 def find_buy_sell_points_for_daily_data():
@@ -250,20 +309,15 @@ def visualize(request):
     if ticker and investment and expenses and startdate and enddate:
         stock_symbol = ticker
         buy_sell_points = optimal_buy_sell_points.objects.filter(symbol=stock_symbol).order_by('stock__date')
-        buy_sell_dates = visualize_stock_and_investment(stock_symbol, buy_sell_points, investment, expenses, startdate,
-                                                        enddate)
+        plot1, plot2, buy_sell_dates = visualize_stock_and_investment(stock_symbol, buy_sell_points, investment,
+                                                                      expenses, startdate,
+                                                                      enddate)
     else:
         return HttpResponse(status=404)
 
-    buffer = io.BytesIO()
-    plt.savefig(buffer, format='png')
-    buffer.seek(0)
-
-    image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
-    plt.close()
-
     context = {
-        'img': image_base64,
+        'img': plot1,
+        'img2': plot2,
         'buy_sell_dates': buy_sell_dates
     }
 
@@ -331,9 +385,10 @@ def created_strategy(request):
         chosen_provider = request.POST.get('provider')
 
         buffer = io.BytesIO()
-        transactions, initial_investment_total, final_investment_total = create_strategy(investment, start_date,
-                                                                                         end_date, chosen_stocks,
-                                                                                         chosen_provider)
+        transactions, initial_investment_total, final_investment_total, hold_investment, investment_growth, hold_investment_growth = create_strategy(
+            investment, start_date,
+            end_date, chosen_stocks,
+            chosen_provider)
         plt.savefig(buffer, format='png')
         buffer.seek(0)
         image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
@@ -349,6 +404,9 @@ def created_strategy(request):
             'transactions': transactions,
             'initial_investment_total': initial_investment_total,
             'final_investment_total': final_investment_total,
+            'hold_investment': hold_investment,
+            'investment_growth': investment_growth,
+            'hold_investment_growth': hold_investment_growth
         }
         return render(request, 'createdstrategy.html', context)
     else:

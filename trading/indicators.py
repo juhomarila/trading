@@ -3,6 +3,8 @@ from datetime import timedelta
 from typing import List
 import numpy as np
 import pandas as pd
+import django
+from django.db import connection
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from pyti.moving_average_convergence_divergence import moving_average_convergence_divergence as macd
@@ -112,19 +114,16 @@ def calculate_adx(stock_symbol, model, reverse, period, daterange):
             model.objects.filter(symbol=stock_symbol)
             .order_by('date')[:daterange + 1])[::-1]
         stock_data = reversed_stock_data[:period + additional]
-        if len(stock_data) >= period + additional:
-            print(f"ADX REVERSE ALKU: {stock_data[0].date}")
-            print(f"ADX REVERSE LOPPU: {stock_data[period + additional - 1].date}")
     else:
-        reversed_stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('date')[:daterange + period]
-        stock_data = reversed_stock_data[0 if daterange < period else daterange - period + 1:]
-        if len(stock_data) >= 27:
-            print(f"ADX ALKU: {stock_data[0].date}")
-            print(f"ADX LOPPU: {stock_data[period - 1].date}")
-            print(f"PITUUS: {len(stock_data)}")
+        reversed_stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('-date').reverse()[
+                              :daterange + 1]
+        stock_data = reversed_stock_data[0 if daterange < 27 else daterange - 27 + 1:]
 
     if reverse and len(stock_data) >= period + 2 or not reverse and len(stock_data) >= 27:
-        last_stock = stock_data[period - 1]
+        if reverse:
+            last_stock = stock_data[period - 1]
+        else:
+            last_stock = stock_data[27 - 1]
 
         df = pd.DataFrame({
             'date': [entry.date for entry in stock_data],
@@ -152,7 +151,6 @@ def calculate_adx(stock_symbol, model, reverse, period, daterange):
 
         # Get the last ADX value
         last_row = df.iloc[-1]
-        print(f"ADX: {last_row['ADX']}")
 
         # Save ADX value to the appropriate model
         if reverse:
@@ -170,10 +168,7 @@ def calculate_adx(stock_symbol, model, reverse, period, daterange):
 def calculate_aroon(stock_symbol, daterange, period=25):
     reversed_stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('date')[:daterange + 1]
     stock_data = reversed_stock_data[0 if daterange < period else daterange - period + 1:]
-    print(f"AROON DATA LENGTH: {len(stock_data)}")
     if len(stock_data) >= period:
-        print(f"AROON ALKU: {stock_data[0].date}")
-        print(f"AROON LOPPU: {stock_data[period - 1].date}")
         # Get the high and low prices for the entire period
         high_prices = [stock.high for stock in stock_data]
         low_prices = [stock.low for stock in stock_data]
@@ -202,13 +197,7 @@ def calculate_ema(stock_symbol, model, reverse, period, daterange):
         stock_data = reversed_stock_data[0 if daterange < period else daterange - period + 1:]
 
     k = 2 / (period + 1)
-
-    print(f"EMA {period} LENGTH: {len(stock_data)}")
-
     if len(stock_data) >= period:
-        print(f"EMA ALKU: {stock_data[0].date}")
-        print(f"EMA LOPPU: {stock_data[period - 1].date}")
-
         # Initialize EMA with the first closing price
         exp_mov_av = stock_data[0].close
 
@@ -271,8 +260,6 @@ def calculate_macd(stock_symbol, model, reverse, period, daterange):
         close_prices = [stock.close for stock in stock_data]
         macd_values = macd(close_prices, 13, 26)
         signal_line = ema(macd_values, period)
-        print(f"MACD ALKU: {stock_data[0].date}")
-        print(f"MACD LOPPU: {stock_data[period - 1].date}")
 
         if reverse:
             signal, _ = reverse_signals.objects.get_or_create(stock=stock_data[period - 1], symbol=stock_symbol)
@@ -293,10 +280,7 @@ def calculate_rsi(stock_symbol, model, reverse, period, daterange):
         reversed_stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('date')[:daterange + 1]
         stock_data = reversed_stock_data[0 if daterange < period else daterange - period + 1:]
 
-    print(f"RSI LENGTH: {len(stock_data)}")
     if len(stock_data) >= period:
-        print(f"RSI ALKU: {stock_data[0].date}")
-        print(f"RSI LOPPU: {stock_data[period - 1].date}")
         signals_obj, _ = signals.objects.get_or_create(stock=stock_data[period - 1])
         data = [data.close for data in stock_data[::-1]]
         close_prices = {'close': data}
@@ -346,14 +330,12 @@ def calculate_sd(stock_symbol, model, reverse, period, daterange):
 
         std_dev = last_row['std_dev']
         if reverse:
-            print(f"SD REVERSE DATE: {last_stock.date}")
             reverse_signal, created = reverse_signals.objects.get_or_create(stock=last_stock,
                                                                             symbol=stock_symbol)
             if created or reverse_signal.std_dev is None or reverse_signal.std_dev == 0:
                 reverse_signal.std_dev = std_dev
                 reverse_signal.save()
         else:
-            print(f"SD DATE: {last_stock.date}")
             signals_obj, created = signals.objects.get_or_create(stock=last_stock,
                                                                  symbol=stock_symbol)
             if signals_obj.std_dev is None or signals_obj.std_dev == 0:
@@ -362,12 +344,13 @@ def calculate_sd(stock_symbol, model, reverse, period, daterange):
 
 
 def find_optimum_buy_sell_points(stock_symbol, daterange, alldata):
+    django.setup()
+    connection.close()
     if alldata:
         stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('date')
         for i in range(len(stock_data)):
             if i >= daterange:
                 stock_daily = stock_data[i]
-                print(f"PÄIVÄ: {stock_daily.date}")
                 reverse_indicator = reverse_signals.objects.get(stock=stock_daily)
                 indicator = signals.objects.get(stock=stock_daily)
                 if optimal_buy_sell_points.objects.filter(stock=stock_daily).exists():
@@ -377,21 +360,18 @@ def find_optimum_buy_sell_points(stock_symbol, daterange, alldata):
                     prev_stock = finnish_stock_daily.objects.filter(symbol=stock_symbol,
                                                                     date__lt=stock_daily.date).order_by(
                         '-date').first()
+                    prev_indicator = signals.objects.filter(symbol=stock_symbol,
+                                                            stock__date__lt=stock_daily.date).order_by(
+                        '-stock__date').first()
                     prev_close_val = prev_stock.close
-                    print(f"REVERSEN PÄIVÄ: {stock_daily.date}")
-                    print(f"OIKEINPÄIN PÄIVÄ: {indicator.stock.date}")
-                    if (reverse_indicator.adx > 35
-                            and indicator.aroon_up > indicator.aroon_down * 1.1
-                            # and indicator.macd * 5 < indicator.macd_signal
-                            and close_val > prev_close_val - reverse_indicator.std_dev
-                            and indicator.ema50 > indicator.ema200):
+                    if indicator.adx > 20 and indicator.adx > prev_indicator.adx \
+                            and close_val > indicator.ema20 and close_val > indicator.ema50 \
+                            and close_val > indicator.ema100 and close_val > indicator.ema200:
                         optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                                command="BUY", value=close_val)
-                    elif (reverse_indicator.adx > 80
-                          and indicator.aroon_up < indicator.aroon_down * 1.4
-                          and indicator.macd > indicator.macd_signal * 3
-                          and close_val < prev_close_val + reverse_indicator.std_dev
-                          and indicator.ema50 < indicator.ema200):
+                    elif indicator.adx < 20 and indicator.adx < prev_indicator.adx \
+                            and close_val < indicator.ema20 and close_val < indicator.ema50 \
+                            and close_val < indicator.ema100 and close_val < indicator.ema200:
                         optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                                command="SELL", value=close_val)
     else:
@@ -408,24 +388,16 @@ def find_optimum_buy_sell_points(stock_symbol, daterange, alldata):
                                                                 date__lt=stock_daily.date).order_by(
                     '-date').first()
                 prev_close_val = prev_stock.close
-                print(f"REVERSEN PÄIVÄ: {stock_daily.date}")
-                print(f"OIKEINPÄIN PÄIVÄ: {indicator.stock.date}")
-                if ((reverse_indicator.adx > 35
-                     and indicator.aroon_up > indicator.aroon_down * 1.1
-                     # and indicator.macd * 5 < indicator.macd_signal
-                     and indicator.rsi14 < 50
-                     and close_val > prev_close_val - reverse_indicator.std_dev)
-                        or indicator.ema50 > indicator.ema200
-                        or indicator.rsi14 < 8):
+                if (indicator.aroon_up > indicator.aroon_down * 1.1
+                        # and indicator.macd * 5 < indicator.macd_signal
+                        and close_val > prev_close_val - indicator.std_dev
+                        and indicator.ema50 > indicator.ema200):
                     optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                            command="BUY", value=close_val)
-                elif ((reverse_indicator.adx > 80
-                       and indicator.aroon_up < indicator.aroon_down * 1.4
-                       and indicator.macd > indicator.macd_signal * 3
-                       and indicator.rsi14 > 50
-                       and close_val < prev_close_val + reverse_indicator.std_dev)
-                      or indicator.ema50 < indicator.ema200
-                      or indicator.rsi14 > 93):
+                elif (indicator.aroon_up < indicator.aroon_down * 1.4
+                      and indicator.macd > indicator.macd_signal * 3
+                      and close_val < prev_close_val + indicator.std_dev
+                      and indicator.ema50 < indicator.ema200):
                     optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                            command="SELL", value=close_val)
 

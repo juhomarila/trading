@@ -8,7 +8,8 @@
     <p>Valitut osakkeet: {{ chosen_stocks }}</p>
     <p>Valittu palveluntarjoaja: {{ chosen_provider }}</p>
     <p>Transaktioita: {{ transactions|length }}</p>
-    <p>Sijoitusten summa lopussa (ml. alkupääoma): {{ final_investment_total }} </p>
+    <p>Sijoitusten summa ja tuottoprosentti lopussa (ml. alkupääoma): {{ final_investment_total }}, {{ investment_growth }}% </p>
+    <p>Sijoitusten summa ja tuottoprosentti holdilla (ml. alkupääoma): {{ hold_investment }}, {{ hold_investment_growth }}%</p>
     <img src="data:image/png;base64, {{ img }}" alt="Plotti" width="auto" height="auto">
     <table class="table">
         <thead>
