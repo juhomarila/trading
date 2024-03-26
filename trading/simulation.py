@@ -3,24 +3,24 @@ import multiprocessing
 from multiprocessing import Manager, Semaphore
 from trading.models import finnish_stock_daily, signals
 
-MAX_PROCESSES = 8
+MAX_PROCESSES = 32
 
 
 def simulate_trading(stock_indicator_data, buy_condition_params, sell_condition_params):
     investment = 500
-    initial_investment = 500
     stocks = 0
     prev_command = 'SELL'
-    for i in range(len(stock_indicator_data)):
+    i = 0
+    for indicator in stock_indicator_data:
         if i >= 186:
             # Buy condition using parameters from buy_condition_params
             if prev_command == 'SELL' \
-                    and buy_condition_params['adx_threshold'] < stock_indicator_data[i].adx < buy_condition_params[
-                'adx_high_threshold'] \
-                    and stock_indicator_data[i].rsi14 < buy_condition_params['rsi_threshold'] \
-                    and stock_indicator_data[i].aroon_up > stock_indicator_data[i].aroon_down \
-                    and stock_indicator_data[i].aroon_up > buy_condition_params['aroon_up_thresholds'] \
-                    and stock_indicator_data[i].aroon_down < buy_condition_params['aroon_down_thresholds'] \
+                    and buy_condition_params['adx_threshold'] < indicator['adx'] < buy_condition_params[
+                    'adx_high_threshold'] \
+                    and indicator['rsi14'] < buy_condition_params['rsi_threshold'] \
+                    and indicator['aroon_up'] > indicator['aroon_down'] \
+                    and indicator['aroon_up'] > buy_condition_params['aroon_up_thresholds'] \
+                    and indicator['aroon_down'] < buy_condition_params['aroon_down_thresholds'] \
                     and investment > 5:
                 # and stock_indicator_data[i].stock.close > stock_indicator_data[i].ema20 and stock_indicator_data[
                 #     i].stock.close > stock_indicator_data[i].ema50 \
@@ -30,16 +30,16 @@ def simulate_trading(stock_indicator_data, buy_condition_params, sell_condition_
                 # and (indicator.macd < buy_condition_params['macd_thresholds']) \
                 # and (indicator.aroon_up > buy_condition_params['aroon_up_thresholds']) \
                 # and (indicator.aroon_down > buy_condition_params['aroon_down_thresholds']):
-                stocks = (investment - 5) / stock_indicator_data[i].stock.close
+                stocks = (investment - 5) / indicator['stock__close']
                 prev_command = 'BUY'
 
             # Sell condition using parameters from sell_condition_params
-            elif (prev_command == 'BUY' and sell_condition_params['adx_threshold'] > stock_indicator_data[i].adx >
+            elif (prev_command == 'BUY' and sell_condition_params['adx_threshold'] > indicator['adx'] >
                   sell_condition_params['adx_low_threshold']
-                  and stock_indicator_data[i].rsi14 > sell_condition_params['rsi_threshold']
-                  and stock_indicator_data[i].aroon_up < stock_indicator_data[i].aroon_down
-                  and stock_indicator_data[i].aroon_up < sell_condition_params['aroon_up_thresholds']
-                  and stock_indicator_data[i].aroon_down > sell_condition_params['aroon_down_thresholds']
+                  and indicator['rsi14'] > sell_condition_params['rsi_threshold']
+                  and indicator['aroon_up'] < indicator['aroon_down']
+                  and indicator['aroon_up'] < sell_condition_params['aroon_up_thresholds']
+                  and indicator['aroon_down'] > sell_condition_params['aroon_down_thresholds']
             ) or (
                     i == len(stock_indicator_data) - 1 and stocks != 0):
                 # and stock_indicator_data[i].stock.close < stock_indicator_data[i].ema20 and stock_indicator_data[
@@ -50,11 +50,11 @@ def simulate_trading(stock_indicator_data, buy_condition_params, sell_condition_
                 # and (indicator.macd < sell_condition_params['macd_thresholds']) \
                 # and (indicator.aroon_up < sell_condition_params['aroon_up_thresholds']) \
                 # and (indicator.aroon_down < sell_condition_params['aroon_down_thresholds']):
-                investment = stocks * stock_indicator_data[i].stock.close - 5
+                investment = stocks * indicator['stock__close'] - 5
                 stocks = 0
                 prev_command = 'SELL'
-
-    return investment - initial_investment
+        i += 1
+    return investment - 500
 
 
 def optimize_parameters(buy_param_ranges, sell_param_ranges):
@@ -69,7 +69,8 @@ def optimize_parameters(buy_param_ranges, sell_param_ranges):
     semaphore = Semaphore(MAX_PROCESSES)
 
     processes = []
-    stock_indicator_data = signals.objects.all().order_by('stock__date')
+    stock_indicator_data = signals.objects.all().values('adx', 'rsi14', 'aroon_up', 'aroon_down',
+                                                        'stock__close').order_by('stock__date')
     symbols = finnish_stock_daily.objects.values('symbol').distinct()
     for buy_params in buy_param_combinations:
         sell_param_combinations = itertools.product(*sell_param_ranges.values())

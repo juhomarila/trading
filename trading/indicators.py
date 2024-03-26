@@ -165,8 +165,8 @@ def calculate_adx(stock_symbol, model, reverse, period, daterange):
                 signals_obj.save()
 
 
-def calculate_aroon(stock_symbol, daterange, period=25):
-    reversed_stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('date')[:daterange + 1]
+def calculate_aroon(stock_symbol, daterange, stocks, period=25):
+    reversed_stock_data = stocks[:daterange + 1]
     stock_data = reversed_stock_data[0 if daterange < period else daterange - period + 1:]
     if len(stock_data) >= period:
         # Get the high and low prices for the entire period
@@ -189,11 +189,11 @@ def calculate_aroon(stock_symbol, daterange, period=25):
             signal.save()
 
 
-def calculate_ema(stock_symbol, model, reverse, period, daterange):
+def calculate_ema(stock_symbol, model, reverse, period, daterange, stocks):
     if reverse:
         stock_data = model.objects.filter(symbol=stock_symbol).order_by('-date')
     else:
-        reversed_stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('date')[:daterange + 1]
+        reversed_stock_data = stocks[:daterange + 1]
         stock_data = reversed_stock_data[0 if daterange < period else daterange - period + 1:]
 
     k = 2 / (period + 1)
@@ -248,12 +248,12 @@ def ema(prices: List[float], period: int) -> List[float]:
     return ema_values
 
 
-def calculate_macd(stock_symbol, model, reverse, period, daterange):
+def calculate_macd(stock_symbol, model, reverse, period, daterange, stocks):
     if reverse:
         reversed_stock_data = list(model.objects.filter(symbol=stock_symbol).order_by('date')[:daterange])[::-1]
         stock_data = reversed_stock_data[:27]
     else:
-        reversed_stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('date')[:daterange + 1]
+        reversed_stock_data = stocks[:daterange + 1]
         stock_data = reversed_stock_data[0 if daterange < period else daterange - period + 1:]
 
     if len(stock_data) >= period:
@@ -273,11 +273,11 @@ def calculate_macd(stock_symbol, model, reverse, period, daterange):
             signal.save()
 
 
-def calculate_rsi(stock_symbol, model, reverse, period, daterange):
+def calculate_rsi(stock_symbol, model, reverse, period, daterange, stocks):
     if reverse:
         stock_data = model.objects.filter(symbol=stock_symbol).order_by('-date')
     else:
-        reversed_stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('date')[:daterange + 1]
+        reversed_stock_data = stocks[:daterange + 1]
         stock_data = reversed_stock_data[0 if daterange < period else daterange - period + 1:]
 
     if len(stock_data) >= period:
@@ -298,13 +298,13 @@ def calculate_rsi(stock_symbol, model, reverse, period, daterange):
             signals_obj.save()
 
 
-def calculate_sd(stock_symbol, model, reverse, period, daterange):
+def calculate_sd(stock_symbol, model, reverse, period, daterange, stocks):
     # Retrieve stock data from the database and convert it to a pandas DataFrame
     if reverse:
         reversed_stock_data = list(model.objects.filter(symbol=stock_symbol).order_by('date')[:daterange + 1])[::-1]
         stock_data = reversed_stock_data[:period]
     else:
-        reversed_stock_data = list(model.objects.filter(symbol=stock_symbol).order_by('date')[:daterange + 1])
+        reversed_stock_data = list(stocks[:daterange + 1])
         stock_data = reversed_stock_data[0 if daterange < period else daterange - period + 1:]
     if len(stock_data) >= period:
         df = pd.DataFrame({

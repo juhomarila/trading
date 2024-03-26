@@ -1,6 +1,7 @@
 import base64
 import datetime
 import multiprocessing
+from multiprocessing import Manager, Semaphore
 import os
 import timeit
 import csv
@@ -22,6 +23,8 @@ from .indicators import calculate_adx, calculate_rsi, calculate_aroon, calculate
 from .simulation import optimize_parameters
 from .visualization import visualize_stock_and_investment, create_strategy
 
+MAX_PROCESSES = 8
+
 
 def process_uploaded_csv(request):
     if request.method == 'POST' and request.FILES.getlist('csv_files'):
@@ -29,6 +32,9 @@ def process_uploaded_csv(request):
         csv_files = request.FILES.getlist('csv_files')
 
         # Process each uploaded CSV file
+        manager = Manager()
+        semaphore = Semaphore(MAX_PROCESSES)
+        processes = []
         for csv_file in csv_files:
             if csv_file.name.endswith(".csv"):
                 symbol = csv_file.name.split("-")[0]
@@ -41,11 +47,25 @@ def process_uploaded_csv(request):
                     delimiter = ','
                 else:
                     delimiter = ';'
-                process_csv_data(symbol, csv_content_file, delimiter)
+                p = multiprocessing.Process(target=csv_worker,
+                                            args=(semaphore, symbol, csv_content_file, delimiter))
+                processes.append(p)
+                p.start()
+
+        for process in processes:
+            process.join()
 
         return redirect('process_data')
 
     return render(request, 'upload_csv.html')
+
+
+def csv_worker(semaphore, symbol, csv_content_file, delimiter):
+    semaphore.acquire()
+    try:
+        process_csv_data(symbol, csv_content_file, delimiter)
+    finally:
+        semaphore.release()
 
 
 def process_csv_data(symbol, file, delimiter):
@@ -135,34 +155,19 @@ def process_data(request):
 
 def simulation():
     # buy_param_ranges = {
-    #     'adx_threshold': [34, 35],
-    #     'adx_high_threshold': [74, 75],
-    #     'aroon_up_thresholds': [56.5, 57.5],
-    #     'aroon_down_thresholds': [44.5, 45.5],
-    #     'rsi_threshold': [76.5, 77.5],
+    #     'adx_threshold': [29, 34],
+    #     'adx_high_threshold': [69.5, 74.5],
+    #     'aroon_up_thresholds': [52.5, 57.5],
+    #     'aroon_down_thresholds': [39.5, 44.5],
+    #     'rsi_threshold': [71.5, 76.5],
     # }
     # sell_param_ranges = {
-    #     'adx_threshold': [55, 56],
-    #     'adx_low_threshold': [14, 15],
-    #     'aroon_up_thresholds': [55.5, 56.5],
-    #     'aroon_down_thresholds': [68.5, 69.5],
-    #     'rsi_threshold': [65, 66],
+    #     'adx_threshold': [51, 56],
+    #     'adx_low_threshold': [10.5, 15.5],
+    #     'aroon_up_thresholds': [50.5, 55.5],
+    #     'aroon_down_thresholds': [63.5, 68.5],
+    #     'rsi_threshold': [60, 65],
     # }
-    # buy_param_ranges = {
-    #     'adx_threshold': [34],
-    #     'adx_high_threshold': [74.5, 75.5],
-    #     'aroon_up_thresholds': [56.5, 57.5],
-    #     'aroon_down_thresholds': [44.5, 45.5],
-    #     'rsi_threshold': [76.5],
-    # }
-    # sell_param_ranges = {
-    #     'adx_threshold': [55, 56],
-    #     'adx_low_threshold': [15.5],
-    #     'aroon_up_thresholds': [55.5],
-    #     'aroon_down_thresholds': [68.5, 69.5],
-    #     'rsi_threshold': [65],
-    # }
-
     buy_param_ranges = {
         'adx_threshold': [34],
         'adx_high_threshold': [74.5],
@@ -178,19 +183,6 @@ def simulation():
         'rsi_threshold': [65],
     }
 
-    # buy_param_ranges = {
-    #     'adx_threshold': [34],
-    #     'aroon_up_thresholds': [56.5],
-    #     'aroon_down_thresholds': [44.5],
-    #     'rsi_threshold': [76.5],
-    # }
-    # sell_param_ranges = {
-    #     'adx_threshold': [57],
-    #     'aroon_up_thresholds': [55.5],
-    #     'aroon_down_thresholds': [73.5],
-    #     'rsi_threshold': [65],
-    # }
-
     start = timeit.default_timer()
     best_buy_params, best_sell_params, best_profit = optimize_parameters(buy_param_ranges, sell_param_ranges)
     end = timeit.default_timer()
@@ -203,11 +195,15 @@ def simulation():
 def process_bulk_data(symbol):
     daterange = 14  # For history as long as it goes
     # calculate_BBP8(symbol, finnish_stock_daily, True, 3, daterange)
+    manager = Manager()
+    semaphore = Semaphore(100)
     processes = []
     symbols = finnish_stock_daily.objects.values('symbol').distinct()
+    data = finnish_stock_daily.objects.all().order_by('date')
     for stock_symbol in symbols:
         if stock_symbol['symbol'] != 'S&P500':
-            p = multiprocessing.Process(target=multiprocess_data, args=(stock_symbol['symbol'],))
+            # multiprocess_data(stock_symbol['symbol'], data)
+            p = multiprocessing.Process(target=bulk_worker, args=(semaphore, stock_symbol['symbol'], data,))
             processes.append(p)
             p.start()
 
@@ -215,32 +211,40 @@ def process_bulk_data(symbol):
         process.join()
 
 
-def multiprocess_data(symbol):
+def bulk_worker(semaphore, symbol, data):
+    semaphore.acquire()
+    try:
+        multiprocess_data(symbol, data)
+    finally:
+        semaphore.release()
+
+
+def multiprocess_data(symbol, data):
     django.setup()
     connection.close()
-    stocks = finnish_stock_daily.objects.filter(symbol=symbol).order_by('date')
+    stocks = data.filter(symbol=symbol)
     for i in range(len(stocks)):
         print(f"ITERAATIO: {i + 1}, PÄIVÄ: {stocks[i].date} OSAKE: {symbol}")
-        calculate_aroon(symbol, i)
-        calculate_macd(symbol, finnish_stock_daily, False, 26, i)
-        calculate_sd(symbol, finnish_stock_daily, True, 3, i)
-        calculate_sd(symbol, finnish_stock_daily, False, 14, i)
-        calculate_ema(symbol, finnish_stock_daily, False, 20, i)
-        calculate_ema(symbol, finnish_stock_daily, False, 50, i)
-        calculate_ema(symbol, finnish_stock_daily, False, 100, i)
-        calculate_ema(symbol, finnish_stock_daily, False, 200, i)
-        calculate_rsi(symbol, finnish_stock_daily, False, 15, i)
-        calculate_adx(symbol, finnish_stock_daily, True, 3, i)
+        calculate_aroon(symbol, i, stocks)
+        calculate_macd(symbol, finnish_stock_daily, False, 26, i, stocks)
+        calculate_sd(symbol, finnish_stock_daily, False, 14, i, stocks)
+        calculate_ema(symbol, finnish_stock_daily, False, 20, i, stocks)
+        calculate_ema(symbol, finnish_stock_daily, False, 50, i, stocks)
+        calculate_ema(symbol, finnish_stock_daily, False, 100, i, stocks)
+        calculate_ema(symbol, finnish_stock_daily, False, 200, i, stocks)
+        calculate_rsi(symbol, finnish_stock_daily, False, 15, i, stocks)
         calculate_adx(symbol, finnish_stock_daily, False, 14, i)
-        find_optimum_buy_sell_points(symbol, i, False)
+        #find_optimum_buy_sell_points(symbol, i, False)
 
 
 def find_buy_sell_points(symbol):
+    manager = Manager()
+    semaphore = Semaphore(MAX_PROCESSES)
     processes = []
     symbols = signals.objects.values('symbol').distinct()
     for stock_symbol in symbols:
         print(f"SYMBOL: {stock_symbol['symbol']}")
-        p = multiprocessing.Process(target=find_optimum_buy_sell_points, args=(stock_symbol['symbol'], 203, True))
+        p = multiprocessing.Process(target=buy_sell_points_worker, args=(semaphore, stock_symbol['symbol'], 203, True))
         processes.append(p)
         p.start()
 
@@ -252,6 +256,14 @@ def find_buy_sell_points(symbol):
     # for i in range(len(symbols)):
     #     find_optimum_buy_sell_points(symbols[i]['symbol'], 203, True)
     #     print(symbols[i]['symbol'])
+
+
+def buy_sell_points_worker(semaphore, stock_symbol, daterange, alldata):
+    semaphore.acquire()
+    try:
+        find_optimum_buy_sell_points(stock_symbol, daterange, alldata)
+    finally:
+        semaphore.release()
 
 
 def find_buy_sell_points_for_daily_data():
