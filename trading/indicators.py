@@ -351,7 +351,7 @@ def find_optimum_buy_sell_points(stock_symbol, daterange, alldata):
         for i in range(len(stock_data)):
             if i >= daterange:
                 stock_daily = stock_data[i]
-                reverse_indicator = reverse_signals.objects.get(stock=stock_daily)
+                # reverse_indicator = reverse_signals.objects.get(stock=stock_daily)
                 indicator = signals.objects.get(stock=stock_daily)
                 if optimal_buy_sell_points.objects.filter(stock=stock_daily).exists():
                     print("gaga")
@@ -364,18 +364,18 @@ def find_optimum_buy_sell_points(stock_symbol, daterange, alldata):
                     #                                         stock__date__lt=stock_daily.date).order_by(
                     #     '-stock__date').first()
                     # prev_close_val = prev_stock.close
-                    if 34 < indicator.adx < 74.5 \
+                    if 23.5 < indicator.adx < 69.5 \
                             and indicator.rsi14 < 76.5 \
                             and indicator.aroon_up > indicator.aroon_down \
-                            and indicator.aroon_up > 57.5 \
-                            and indicator.aroon_down < 44.5:
+                            and indicator.aroon_up > 61 \
+                            and indicator.aroon_down < 46.5:
                         optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                                command="BUY", value=close_val)
-                    elif 56 > indicator.adx > 15.5 \
+                    elif 54 > indicator.adx > 17.5 \
                             and indicator.rsi14 > 65 \
                             and indicator.aroon_up < indicator.aroon_down \
-                            and indicator.aroon_up < 55.5 \
-                            and indicator.aroon_down > 68.5:
+                            and indicator.aroon_up < 48.5 \
+                            and indicator.aroon_down > 80:
                         optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                                command="SELL", value=close_val)
     else:

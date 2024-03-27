@@ -56,10 +56,10 @@ def visualize_stock_and_investment(stock_symbol, buy_sell_points, initial_invest
     smoothed_ema50_values = np.convolve(ema50_values, np.ones(window_size) / window_size, mode='valid')
     smoothed_ema100_values = np.convolve(ema100_values, np.ones(window_size) / window_size, mode='valid')
     smoothed_ema200_values = np.convolve(ema200_values, np.ones(window_size) / window_size, mode='valid')
-    smoothed_rsi14_values = np.convolve(rsi14_values, np.ones(window_size) / window_size, mode='valid')
-    smoothed_adx_values = np.convolve(adx_values, np.ones(window_size) / window_size, mode='valid')
-    smoothed_reverse_adx_values = np.convolve(filled_reverse_adx_values, np.ones(window_size) / window_size,
-                                              mode='valid')
+    #smoothed_rsi14_values = np.convolve(rsi14_values, np.ones(window_size) / window_size, mode='valid')
+    #smoothed_adx_values = np.convolve(adx_values, np.ones(window_size) / window_size, mode='valid')
+    #smoothed_reverse_adx_values = np.convolve(filled_reverse_adx_values, np.ones(window_size) / window_size,
+    #                                          mode='valid')
 
     dates_smoothed = dates[window_size - 1:]
 

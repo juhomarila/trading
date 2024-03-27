@@ -154,34 +154,34 @@ def process_data(request):
 
 
 def simulation():
-    # buy_param_ranges = {
-    #     'adx_threshold': [29, 34],
-    #     'adx_high_threshold': [69.5, 74.5],
-    #     'aroon_up_thresholds': [52.5, 57.5],
-    #     'aroon_down_thresholds': [39.5, 44.5],
-    #     'rsi_threshold': [71.5, 76.5],
-    # }
-    # sell_param_ranges = {
-    #     'adx_threshold': [51, 56],
-    #     'adx_low_threshold': [10.5, 15.5],
-    #     'aroon_up_thresholds': [50.5, 55.5],
-    #     'aroon_down_thresholds': [63.5, 68.5],
-    #     'rsi_threshold': [60, 65],
-    # }
     buy_param_ranges = {
-        'adx_threshold': [34],
-        'adx_high_threshold': [74.5],
-        'aroon_up_thresholds': [57.5],
-        'aroon_down_thresholds': [44.5],
+        'adx_threshold': [23.5],
+        'adx_high_threshold': [69.5],
+        'aroon_up_thresholds': [61],
+        'aroon_down_thresholds': [46.5],
         'rsi_threshold': [76.5],
     }
     sell_param_ranges = {
-        'adx_threshold': [56],
-        'adx_low_threshold': [15.5],
-        'aroon_up_thresholds': [55.5],
-        'aroon_down_thresholds': [68.5],
+        'adx_threshold': [54],
+        'adx_low_threshold': [17.5],
+        'aroon_up_thresholds': [48.5],
+        'aroon_down_thresholds': [80],
         'rsi_threshold': [65],
     }
+    # buy_param_ranges = {
+    #     'adx_threshold': [23.5],
+    #     'adx_high_threshold': [69.5],
+    #     'aroon_up_thresholds': [61],
+    #     'aroon_down_thresholds': [46.5],
+    #     'rsi_threshold': [76.5],
+    # }
+    # sell_param_ranges = {
+    #     'adx_threshold': [54],
+    #     'adx_low_threshold': [17.5],
+    #     'aroon_up_thresholds': [50.5],
+    #     'aroon_down_thresholds': [58.5],
+    #     'rsi_threshold': [65],
+    # }
 
     start = timeit.default_timer()
     best_buy_params, best_sell_params, best_profit = optimize_parameters(buy_param_ranges, sell_param_ranges)
@@ -234,7 +234,7 @@ def multiprocess_data(symbol, data):
         calculate_ema(symbol, finnish_stock_daily, False, 200, i, stocks)
         calculate_rsi(symbol, finnish_stock_daily, False, 15, i, stocks)
         calculate_adx(symbol, finnish_stock_daily, False, 14, i)
-        #find_optimum_buy_sell_points(symbol, i, False)
+        # find_optimum_buy_sell_points(symbol, i, False)
 
 
 def find_buy_sell_points(symbol):
