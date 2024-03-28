@@ -15,7 +15,7 @@
         {% for signal in signals %}
         <tr>
             <td>{{ signal.symbol }}</td>
-            <td>{{ signal.date_five_rows_ahead }}</td>
+            <td>{{ signal.stock.date }}</td>
             <td style="{% if signal.command == 'BUY' %}color:green{% elif signal.command == 'SELL' %}color:red{% endif %}">
                     {{ signal.command }}
             </td>

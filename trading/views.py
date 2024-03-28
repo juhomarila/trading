@@ -407,23 +407,12 @@ def settings(request, symbol):
 
 def signals_page(request, symbol):
     thirty_days_ago = datetime.datetime.now() - datetime.timedelta(days=30)
-    half_year_ago = datetime.datetime.now() - datetime.timedelta(days=183)
     if symbol == 'ALL':
         buy_sell_signals = optimal_buy_sell_points.objects.filter(stock__date__gte=thirty_days_ago).order_by(
             '-stock__date')
     else:
-        # buy_sell_signals = optimal_buy_sell_points.objects.filter(symbol=symbol, stock__date__gte=half_year_ago).order_by('-stock__date')
         buy_sell_signals = optimal_buy_sell_points.objects.filter(symbol=symbol).order_by(
             '-stock__date')
-
-    five_rows_ahead_date = finnish_stock_daily.objects.filter(
-        symbol=OuterRef('symbol'),
-        date__gt=OuterRef('stock__date')
-    ).order_by('date').values('date')[4:5]
-
-    buy_sell_signals = buy_sell_signals.annotate(
-        date_five_rows_ahead=Subquery(five_rows_ahead_date)
-    )
 
     return render(request, 'signals_page.html', {'signals': buy_sell_signals})
 
