@@ -4,10 +4,12 @@
 <div class="container d-flex flex-column align-items-center">
     <h2>Valitse CSV-tiedostoja</h2>
     <p>Nimessä on oltava osakkeen lyhenne, jonka perässä on -, esim: ELISA-jotain</p>
+    <p>Alta otettujen csv:t toimivat suoraan</p>
+    <p><a href="https://www.nasdaqomxnordic.com/osakkeet/historiallisetkurssitiedot?languageId=4">https://www.nasdaqomxnordic.com/osakkeet/historiallisetkurssitiedot?languageId=4</a></p>
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="form-group">
-            <label for="csv_files">Valitse CSV-tiedostot:</label>
+            <label for="csv_files">Valitse CSV-tiedostot (maksimi 20):</label>
             <input type="file" class="form-control-file" id="csv_files" name="csv_files" multiple>
         </div>
         <button type="submit" class="btn btn-primary">Lataa palvelimelle</button>

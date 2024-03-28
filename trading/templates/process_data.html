@@ -17,14 +17,12 @@
             $('button').prop('disabled', true);
             // Get CSRF token
             var csrftoken = $("[name=csrfmiddlewaretoken]").val();
-            // Get selected symbol from the dropdown
-            var symbol = $('#symbolDropdown').val();
             // Make AJAX request to the backend
             $.ajax({
                 url: '/process-data/',
                 method: 'POST',
                 headers: {'X-CSRFToken': csrftoken},  // Include CSRF token in headers
-                data: {'func_name': funcName, 'symbol': symbol, 'csrfmiddlewaretoken': csrftoken},
+                data: {'func_name': funcName, 'csrfmiddlewaretoken': csrftoken},
                 success: function(response) {
                     // Hide spinner
                     $('#spinner').hide();
@@ -47,25 +45,21 @@
 <div class="container mt-5 text-center">
     {% csrf_token %}
     <form id="processForm" method="post">
-        <div class="form-group">
-            <label for="symbolDropdown">Valitse osake:</label>
-            <select class="form-control" id="symbolDropdown" name="symbol">
-                {% for symbol in symbols %}
-                <option value="{{ symbol.symbol }}">{{ symbol.symbol }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <button type="button" class="btn btn-primary mr-2" onclick="processData('bulk')">Prosessoi valitusta osakkeesta
+        <button type="button" class="btn btn-primary mr-2" onclick="processData('bulk')">Prosessoi kaikista osakkeesta
             signaalit
         </button>
-        <button type="button" class="btn btn-primary mr-2" onclick="processData('buy_sell')">Prosessoi valitusta
+        <button type="button" class="btn btn-primary mr-2" onclick="processData('buy_sell')">Prosessoi kaikista
             osakkeesta osta/myy-pisteet
         </button>
         <button type="button" class="btn btn-primary" onclick="processData('get_daily')">Päivittäisen datan haku
         </button>
-        <button type="button" class="btn btn-primary mr-2" onclick="processData('daily')">Päivittäisdatan prosessointi signaaleiksi
+        <button type="button" class="btn btn-primary mr-2" onclick="processData('daily')">Päivittäisdatan prosessointi
+            signaaleiksi
         </button>
-        <button type="button" class="btn btn-primary" onclick="processData('get_daily_buy_sell')">Päivittäisen datan osta/myy-pisteet
+        <button type="button" class="btn btn-primary" onclick="processData('get_daily_buy_sell')">Päivittäisen datan
+            osta/myy-pisteet
+        </button>
+        <button type="button" class="btn btn-primary" onclick="processData('simulate')">Simuloi
         </button>
     </form>
 </div>

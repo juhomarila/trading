@@ -1,6 +1,9 @@
 import base64
 import datetime
+import multiprocessing
+from multiprocessing import Manager, Semaphore
 import os
+import timeit
 import csv
 import matplotlib.pyplot as plt
 import io
@@ -8,14 +11,19 @@ import io
 from django.db.models import Min, Max, OuterRef, Subquery
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect
+import django
+from django.db import connection
 from yahoofinancials import YahooFinancials
 from io import StringIO
 
 # from .machinelearning import train_machine_learning_model_future_values, train_machine_learning_model
 from .models import signals, finnish_stock_daily, optimal_buy_sell_points
 from .indicators import calculate_adx, calculate_rsi, calculate_aroon, calculate_macd, \
-    calculate_BBP8, calculate_sd, find_optimum_buy_sell_points, calculate_profit_loss
+    calculate_BBP8, calculate_sd, find_optimum_buy_sell_points, calculate_profit_loss, calculate_ema
+from .simulation import optimize_parameters
 from .visualization import visualize_stock_and_investment, create_strategy
+
+MAX_PROCESSES = 8
 
 
 def process_uploaded_csv(request):
@@ -24,6 +32,9 @@ def process_uploaded_csv(request):
         csv_files = request.FILES.getlist('csv_files')
 
         # Process each uploaded CSV file
+        manager = Manager()
+        semaphore = Semaphore(MAX_PROCESSES)
+        processes = []
         for csv_file in csv_files:
             if csv_file.name.endswith(".csv"):
                 symbol = csv_file.name.split("-")[0]
@@ -36,11 +47,25 @@ def process_uploaded_csv(request):
                     delimiter = ','
                 else:
                     delimiter = ';'
-                process_csv_data(symbol, csv_content_file, delimiter)
+                p = multiprocessing.Process(target=csv_worker,
+                                            args=(semaphore, symbol, csv_content_file, delimiter))
+                processes.append(p)
+                p.start()
+
+        for process in processes:
+            process.join()
 
         return redirect('process_data')
 
     return render(request, 'upload_csv.html')
+
+
+def csv_worker(semaphore, symbol, csv_content_file, delimiter):
+    semaphore.acquire()
+    try:
+        process_csv_data(symbol, csv_content_file, delimiter)
+    finally:
+        semaphore.release()
 
 
 def process_csv_data(symbol, file, delimiter):
@@ -100,15 +125,14 @@ def process_csv_data(symbol, file, delimiter):
 
 
 def process_data(request):
-    symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
+    symbol_list = finnish_stock_daily.objects.values('symbol').order_by('symbol').distinct()
     if request.method == 'POST':
         func_name = request.POST.get('func_name')
-        symbol = request.POST.get('symbol')
         if func_name == 'bulk':
-            process_bulk_data(symbol)
+            process_bulk_data()
             return JsonResponse({'message': 'Massadatan prosessointi valmis'})
         elif func_name == 'buy_sell':
-            find_buy_sell_points(symbol)
+            find_buy_sell_points()
             return JsonResponse({'message': 'Osto/myynti pisteiden prosessointi valmis'})
         elif func_name == 'daily':
             process_daily_data()
@@ -119,31 +143,136 @@ def process_data(request):
         elif func_name == 'get_daily_buy_sell':
             find_buy_sell_points_for_daily_data()
             return JsonResponse({'message': 'Päivittäinen osto-/myyntipisteet kirjoitettu kantaan'})
+        elif func_name == 'simulate':
+            simulation()
+            return JsonResponse({'message': 'Simuloitu'})
         else:
             return JsonResponse({'message': 'Invalid request'}, status=400)
     elif request.method == 'GET':
         return render(request, 'process_data.html', {'symbols': symbol_list})
 
 
-def process_bulk_data(symbol):
-    print(symbol)
-    daterange = 36500  # For history as long as it goes
+def simulation():
+    buy_param_ranges = {
+        'adx_threshold': [23.5],
+        'adx_high_threshold': [69.5],
+        'aroon_up_thresholds': [61],
+        'aroon_down_thresholds': [46.5],
+        'rsi_threshold': [76.5],
+    }
+    sell_param_ranges = {
+        'adx_threshold': [54],
+        'adx_low_threshold': [17.5],
+        'aroon_up_thresholds': [48.5],
+        'aroon_down_thresholds': [80],
+        'rsi_threshold': [65],
+    }
+    # buy_param_ranges = {
+    #     'adx_threshold': [23.5],
+    #     'adx_high_threshold': [69.5],
+    #     'aroon_up_thresholds': [61],
+    #     'aroon_down_thresholds': [46.5],
+    #     'rsi_threshold': [76.5],
+    # }
+    # sell_param_ranges = {
+    #     'adx_threshold': [54],
+    #     'adx_low_threshold': [17.5],
+    #     'aroon_up_thresholds': [50.5],
+    #     'aroon_down_thresholds': [58.5],
+    #     'rsi_threshold': [65],
+    # }
+
+    start = timeit.default_timer()
+    best_buy_params, best_sell_params, best_profit = optimize_parameters(buy_param_ranges, sell_param_ranges)
+    end = timeit.default_timer()
+    print(f"Execution Time: {end - start}")
+    print("Best Buy Parameters:", best_buy_params)
+    print("Best Sell Parameters:", best_sell_params)
+    print("Best Overall Profit:", best_profit)
+
+
+def process_bulk_data():
+    daterange = 14  # For history as long as it goes
     # calculate_BBP8(symbol, finnish_stock_daily, True, 3, daterange)
-    calculate_sd(symbol, finnish_stock_daily, True, 3, daterange)
-    calculate_macd(symbol, finnish_stock_daily, True, 3, daterange)
-    calculate_adx(symbol, finnish_stock_daily, True, 3, daterange)
+    manager = Manager()
+    semaphore = Semaphore(100)
+    processes = []
+    symbols = finnish_stock_daily.objects.values('symbol').distinct()
+    data = finnish_stock_daily.objects.all().order_by('date')
+    for stock_symbol in symbols:
+        if stock_symbol['symbol'] != 'S&P500':
+            # multiprocess_data(stock_symbol['symbol'], data)
+            p = multiprocessing.Process(target=bulk_worker, args=(semaphore, stock_symbol['symbol'], data,))
+            processes.append(p)
+            p.start()
+
+    for process in processes:
+        process.join()
 
 
-def find_buy_sell_points(symbol):
-    find_optimum_buy_sell_points(symbol, 36500, True)
-    print(symbol)
+def bulk_worker(semaphore, symbol, data):
+    semaphore.acquire()
+    try:
+        multiprocess_data(symbol, data)
+    finally:
+        semaphore.release()
+
+
+def multiprocess_data(symbol, data):
+    django.setup()
+    connection.close()
+    stocks = data.filter(symbol=symbol)
+    for i in range(len(stocks)):
+        # if symbol == 'OUT1V':
+        print(f"ITERAATIO: {i + 1}, PÄIVÄ: {stocks[i].date} OSAKE: {symbol}")
+        calculate_aroon(symbol, i, stocks)
+        # calculate_macd(symbol, finnish_stock_daily, False, 26, i, stocks)
+        # calculate_sd(symbol, finnish_stock_daily, False, 14, i, stocks)
+        # calculate_ema(symbol, finnish_stock_daily, False, 20, i, stocks)
+        # calculate_ema(symbol, finnish_stock_daily, False, 50, i, stocks)
+        # calculate_ema(symbol, finnish_stock_daily, False, 100, i, stocks)
+        # calculate_ema(symbol, finnish_stock_daily, False, 200, i, stocks)
+        calculate_rsi(symbol, finnish_stock_daily, False, 15, i, stocks)
+        calculate_adx(symbol, finnish_stock_daily, False, 14, i, True, stocks)
+        # find_optimum_buy_sell_points(symbol, i, False)
+
+
+def find_buy_sell_points():
+    manager = Manager()
+    semaphore = Semaphore(MAX_PROCESSES)
+    processes = []
+    symbols = signals.objects.values('symbol').distinct()
+    for stock_symbol in symbols:
+        print(f"SYMBOL: {stock_symbol['symbol']}")
+        p = multiprocessing.Process(target=buy_sell_points_worker, args=(semaphore, stock_symbol['symbol'], 26, True))
+        processes.append(p)
+        p.start()
+
+    for process in processes:
+        process.join()
+    # daterange = 14  # For history as long as it goes
+    # # calculate_BBP8(symbol, finnish_stock_daily, True, 3, daterange)
+
+    # for i in range(len(symbols)):
+    #     find_optimum_buy_sell_points(symbols[i]['symbol'], 203, True)
+    #     print(symbols[i]['symbol'])
+
+
+def buy_sell_points_worker(semaphore, stock_symbol, daterange, alldata):
+    semaphore.acquire()
+    try:
+        find_optimum_buy_sell_points(stock_symbol, daterange, alldata)
+    finally:
+        semaphore.release()
 
 
 def find_buy_sell_points_for_daily_data():
     symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
     for i in range(len(symbol_list)):
-        find_optimum_buy_sell_points(symbol_list[i]['symbol'], 50, True)
-        print(symbol_list[i]['symbol'])
+        if symbol_list[i]['symbol'] != "S&P500":
+            find_optimum_buy_sell_points(symbol_list[i]['symbol'], 50,
+                                         False)  # daterange here can be anything, doesn't affect calculations
+            print(symbol_list[i]['symbol'])
 
 
 def find_buy_sell_points_for_daily_data_cronjob():
@@ -153,13 +282,18 @@ def find_buy_sell_points_for_daily_data_cronjob():
 
 def process_daily_data():
     symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
+
     for i in range(len(symbol_list)):
-        print(symbol_list[i]['symbol'])
-        daterange = 10  # for only 10 days, since data is new
-        calculate_BBP8(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
-        calculate_sd(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
-        calculate_macd(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
-        calculate_adx(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
+        if symbol_list[i]['symbol'] != 'S&P500':
+            data = finnish_stock_daily.objects.filter(symbol=symbol_list[i]['symbol']).order_by('-date')[
+                   :27]  # IMPORTANT TO HAVE 27 since adx needs exactly 27 entries. If more results distort
+            stocks = data[::-1]
+            print(symbol_list[i]['symbol'])
+            for y in range(len(stocks)):
+                calculate_aroon(symbol_list[i]['symbol'], y, stocks)
+                calculate_rsi(symbol_list[i]['symbol'], finnish_stock_daily, False, 15, y, stocks)
+            for z in range(len(stocks)):
+                calculate_adx(symbol_list[i]['symbol'], finnish_stock_daily, False, 14, z, False, stocks)
 
 
 def process_daily_data_cronjob(request):
@@ -237,20 +371,15 @@ def visualize(request):
     if ticker and investment and expenses and startdate and enddate:
         stock_symbol = ticker
         buy_sell_points = optimal_buy_sell_points.objects.filter(symbol=stock_symbol).order_by('stock__date')
-        buy_sell_dates = visualize_stock_and_investment(stock_symbol, buy_sell_points, investment, expenses, startdate,
-                                                        enddate)
+        plot1, plot2, buy_sell_dates = visualize_stock_and_investment(stock_symbol, buy_sell_points, investment,
+                                                                      expenses, startdate,
+                                                                      enddate)
     else:
         return HttpResponse(status=404)
 
-    buffer = io.BytesIO()
-    plt.savefig(buffer, format='png')
-    buffer.seek(0)
-
-    image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
-    plt.close()
-
     context = {
-        'img': image_base64,
+        'img': plot1,
+        'img2': plot2,
         'buy_sell_dates': buy_sell_dates
     }
 
@@ -318,9 +447,11 @@ def created_strategy(request):
         chosen_provider = request.POST.get('provider')
 
         buffer = io.BytesIO()
-        transactions, initial_investment_total, final_investment_total = create_strategy(investment, start_date,
-                                                                                         end_date, chosen_stocks,
-                                                                                         chosen_provider)
+        (transactions, initial_investment_total, final_investment_total, hold_investment, investment_growth,
+         hold_investment_growth, results) = create_strategy(
+            investment, start_date,
+            end_date, chosen_stocks,
+            chosen_provider)
         plt.savefig(buffer, format='png')
         buffer.seek(0)
         image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
@@ -336,6 +467,10 @@ def created_strategy(request):
             'transactions': transactions,
             'initial_investment_total': initial_investment_total,
             'final_investment_total': final_investment_total,
+            'hold_investment': hold_investment,
+            'investment_growth': investment_growth,
+            'hold_investment_growth': hold_investment_growth,
+            'results': results
         }
         return render(request, 'createdstrategy.html', context)
     else:

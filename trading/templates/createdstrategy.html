@@ -8,8 +8,27 @@
     <p>Valitut osakkeet: {{ chosen_stocks }}</p>
     <p>Valittu palveluntarjoaja: {{ chosen_provider }}</p>
     <p>Transaktioita: {{ transactions|length }}</p>
-    <p>Sijoitusten summa lopussa (ml. alkupääoma): {{ final_investment_total }} </p>
+    <p>Sijoitusten summa ja tuottoprosentti lopussa (ml. alkupääoma): {{ final_investment_total }}, {{ investment_growth }}%</p>
+    <p>Sijoitusten summa ja tuottoprosentti holdilla (ml. alkupääoma): {{ hold_investment }}, {{ hold_investment_growth }}%</p>
     <img src="data:image/png;base64, {{ img }}" alt="Plotti" width="auto" height="auto">
+    <table class="table">
+        <thead>
+        <tr>
+            <th scope="col">Osake</th>
+            <th scope="col">Voitto-/tappioprosentti</th>
+            <th scope="col">Alkuperäissijoituksen voitto-/tappioprosentti</th>
+        </tr>
+        </thead>
+        <tbody class="table-group-divider">
+        {% for symbol, percentage, color, original_percentage, orig_color in results %}
+        <tr>
+            <td>{{ symbol }}</td>
+            <td style="color:{{ color }}">{{ percentage }}</td>
+            <td style="color:{{ orig_color }}">{{ original_percentage }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
     <table class="table">
         <thead>
         <tr>
