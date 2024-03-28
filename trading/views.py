@@ -153,33 +153,35 @@ def process_data(request):
 
 
 def simulation():
+    list_half_step = [i / 2 for i in range(0, 201)]
+    list_one_step = list(range(101))
     buy_param_ranges = {
-        'adx_threshold': [23.5],
-        'adx_high_threshold': [69.5],
-        'aroon_up_thresholds': [61],
-        'aroon_down_thresholds': [46.5],
-        'rsi_threshold': [76.5],
+        'adx_threshold': [55.5],
+        'adx_high_threshold': [63.5],
+        'aroon_up_thresholds': [69.5],
+        'aroon_down_thresholds': [73.5],
+        'rsi_threshold': [56],
     }
     sell_param_ranges = {
-        'adx_threshold': [54],
-        'adx_low_threshold': [17.5],
-        'aroon_up_thresholds': [48.5],
-        'aroon_down_thresholds': [80],
-        'rsi_threshold': [65],
+        'adx_threshold': [33.5],
+        'adx_low_threshold': [22.5],
+        'aroon_up_thresholds': [50.5],
+        'aroon_down_thresholds': [89],
+        'rsi_threshold': [64.5],
     }
     # buy_param_ranges = {
-    #     'adx_threshold': [23.5],
-    #     'adx_high_threshold': [69.5],
-    #     'aroon_up_thresholds': [61],
-    #     'aroon_down_thresholds': [46.5],
-    #     'rsi_threshold': [76.5],
+    #     'adx_threshold': [55.5],
+    #     'adx_high_threshold': [63.5],
+    #     'aroon_up_thresholds': [69.5],
+    #     'aroon_down_thresholds': [73.5],
+    #     'rsi_threshold': [56],
     # }
     # sell_param_ranges = {
-    #     'adx_threshold': [54],
-    #     'adx_low_threshold': [17.5],
+    #     'adx_threshold': [33.5],
+    #     'adx_low_threshold': [22.5],
     #     'aroon_up_thresholds': [50.5],
-    #     'aroon_down_thresholds': [58.5],
-    #     'rsi_threshold': [65],
+    #     'aroon_down_thresholds': [89],
+    #     'rsi_threshold': [64.5],
     # }
 
     start = timeit.default_timer()
@@ -304,7 +306,7 @@ def process_daily_data_cronjob(request):
 def get_daily_data():
     names = finnish_stock_daily.objects.values('symbol').distinct()
     end_date = datetime.date.today()
-    start_date = end_date - datetime.timedelta(days=5)  # Fetch data for the last 5 days
+    start_date = end_date - datetime.timedelta(days=10)  # Fetch data for the last 10 days
     for i in range(len(names)):
         print(names[i])
         print(end_date)

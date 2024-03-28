@@ -378,18 +378,18 @@ def find_optimum_buy_sell_points(stock_symbol, daterange, alldata):
                     #                                         stock__date__lt=stock_daily.date).order_by(
                     #     '-stock__date').first()
                     # prev_close_val = prev_stock.close
-                    if 23.5 < indicator.adx < 69.5 \
-                            and indicator.rsi14 < 76.5 \
+                    if 23.5 < indicator.adx < 62.5 \
+                            and indicator.rsi14 < 56 \
                             and indicator.aroon_up > indicator.aroon_down \
-                            and indicator.aroon_up > 61 \
-                            and indicator.aroon_down < 46.5:
+                            and indicator.aroon_up > 58 \
+                            and indicator.aroon_down < 73.5:
                         optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                                command="BUY", value=close_val)
-                    elif 54 > indicator.adx > 17.5 \
+                    elif 35 > indicator.adx > 17.5 \
                             and indicator.rsi14 > 65 \
                             and indicator.aroon_up < indicator.aroon_down \
-                            and indicator.aroon_up < 48.5 \
-                            and indicator.aroon_down > 80:
+                            and indicator.aroon_up < 50.5 \
+                            and indicator.aroon_down > 89:
                         optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                                command="SELL", value=close_val)
     else:
@@ -405,21 +405,20 @@ def find_optimum_buy_sell_points(stock_symbol, daterange, alldata):
                 continue
             else:
                 close_val = stock_daily.close
-                if 23.5 < indicator.adx < 69.5 \
-                        and indicator.rsi14 < 76.5 \
+                if 23.5 < indicator.adx < 62.5 \
+                        and indicator.rsi14 < 56 \
                         and indicator.aroon_up > indicator.aroon_down \
-                        and indicator.aroon_up > 61 \
-                        and indicator.aroon_down < 46.5:
+                        and indicator.aroon_up > 58 \
+                        and indicator.aroon_down < 73.5:
                     optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                            command="BUY", value=close_val)
-                elif 54 > indicator.adx > 17.5 \
+                elif 35 > indicator.adx > 17.5 \
                         and indicator.rsi14 > 65 \
                         and indicator.aroon_up < indicator.aroon_down \
-                        and indicator.aroon_up < 48.5 \
-                        and indicator.aroon_down > 80:
+                        and indicator.aroon_up < 50.5 \
+                        and indicator.aroon_down > 89:
                     optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                            command="SELL", value=close_val)
-
 
 # stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('-date')[:daterange][::-1]
 # reversed_stock_data = list(finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('date')[:daterange])
