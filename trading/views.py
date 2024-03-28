@@ -306,7 +306,7 @@ def process_daily_data_cronjob(request):
 def get_daily_data():
     names = finnish_stock_daily.objects.values('symbol').distinct()
     end_date = datetime.date.today()
-    start_date = end_date - datetime.timedelta(days=10)  # Fetch data for the last 10 days
+    start_date = end_date - datetime.timedelta(days=3)  # Fetch data for the last 3 days
     for i in range(len(names)):
         print(names[i])
         print(end_date)

@@ -167,7 +167,6 @@ def calculate_adx(stock_symbol, model, reverse, period, daterange, alldata, stoc
         elif alldata is False:
             signals_obj, _ = signals.objects.get_or_create(stock=stock_data[len(stock_data) - 1])
             if signals_obj.adx is None:
-                print(f"ADX PÄIVÄ: {stock_data[len(stock_data) - 1].date}")
                 signals_obj.adx = last_row['ADX']
                 signals_obj.save()
         else:
@@ -196,7 +195,6 @@ def calculate_aroon(stock_symbol, daterange, stocks, period=25):
         # Save the calculated Aroon values
         signal, created = signals.objects.get_or_create(stock=stock_data[period - 1], symbol=stock_symbol)
         if created or signal.aroon_up is None or signal.aroon_up == 0:
-            print(f"AROON PÄIVÄ: {stock_data[period - 1].date}")
             signal.aroon_up = aroon_up
             signal.aroon_down = aroon_down
             signal.save()
@@ -307,7 +305,6 @@ def calculate_rsi(stock_symbol, model, reverse, period, daterange, stocks):
         rs = avg_gain / avg_loss if avg_loss != 0 else np.inf
         rsi = 100 - (100 / (1 + rs))
         if signals_obj.rsi14 is None:
-            print(f"RSI PÄIVÄ: {stock_data[period - 1].date}")
             signals_obj.rsi14 = rsi
             signals_obj.save()
 
