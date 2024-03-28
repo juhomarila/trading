@@ -59,12 +59,12 @@ def visualize_stock_and_investment(stock_symbol, buy_sell_points, initial_invest
 
     window_size = 20  # Adjust the window size as needed for your smoothing preference
 
-    smoothed_ema20_values = np.convolve(ema20_values, np.ones(window_size) / window_size, mode='valid')
-    smoothed_ema50_values = np.convolve(ema50_values, np.ones(window_size) / window_size, mode='valid')
-    smoothed_ema100_values = np.convolve(ema100_values, np.ones(window_size) / window_size, mode='valid')
-    smoothed_ema200_values = np.convolve(ema200_values, np.ones(window_size) / window_size, mode='valid')
-    # smoothed_rsi14_values = np.convolve(rsi14_values, np.ones(window_size) / window_size, mode='valid')
-    # smoothed_adx_values = np.convolve(adx_values, np.ones(window_size) / window_size, mode='valid')
+    # smoothed_ema20_values = np.convolve(ema20_values, np.ones(window_size) / window_size, mode='valid')
+    # smoothed_ema50_values = np.convolve(ema50_values, np.ones(window_size) / window_size, mode='valid')
+    # smoothed_ema100_values = np.convolve(ema100_values, np.ones(window_size) / window_size, mode='valid')
+    # smoothed_ema200_values = np.convolve(ema200_values, np.ones(window_size) / window_size, mode='valid')
+    smoothed_rsi14_values = np.convolve(rsi14_values, np.ones(window_size) / window_size, mode='valid')
+    smoothed_adx_values = np.convolve(adx_values, np.ones(window_size) / window_size, mode='valid')
     # smoothed_reverse_adx_values = np.convolve(filled_reverse_adx_values, np.ones(window_size) / window_size,
     #                                          mode='valid')
 
@@ -193,12 +193,12 @@ def visualize_stock_and_investment(stock_symbol, buy_sell_points, initial_invest
 
     plt.figure(figsize=(16, 8))
     plt.bar(dates[1:], stock_values[1:], label=stock_symbol + ' Value (€)', color='green', alpha=0.3, width=1)
-    plt.plot(dates_smoothed, smoothed_ema20_values, label='EMA20', color='purple')
-    plt.plot(dates_smoothed, smoothed_ema50_values, label='EMA50', color='cyan')
-    plt.plot(dates_smoothed, smoothed_ema100_values, label='EMA100', color='magenta')
-    plt.plot(dates_smoothed, smoothed_ema200_values, label='EMA200', color='orange')
-    # plt.plot(dates_smoothed, smoothed_rsi14_values, label='RSI14', color='blue')
-    # plt.plot(dates_smoothed, smoothed_adx_values, label='ADX', color='black')
+    # plt.plot(dates_smoothed, smoothed_ema20_values, label='EMA20', color='purple')
+    # plt.plot(dates_smoothed, smoothed_ema50_values, label='EMA50', color='cyan')
+    # plt.plot(dates_smoothed, smoothed_ema100_values, label='EMA100', color='magenta')
+    # plt.plot(dates_smoothed, smoothed_ema200_values, label='EMA200', color='orange')
+    plt.plot(dates_smoothed, smoothed_rsi14_values, label='RSI14', color='blue')
+    plt.plot(dates_smoothed, smoothed_adx_values, label='ADX', color='black')
     # plt.plot(dates_smoothed, smoothed_reverse_adx_values, label='REVERSE ADX', color='grey')
     plt.grid(True, linestyle='--', color='gray', alpha=0.5)
     plt.xticks(rotation=45)

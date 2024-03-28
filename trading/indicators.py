@@ -107,13 +107,15 @@ def calculate_adl(stock_symbol, model, reverse):
                     signals_obj.save()
 
 
-def calculate_adx(stock_symbol, model, reverse, period, daterange):
+def calculate_adx(stock_symbol, model, reverse, period, daterange, alldata, stocks):
     if reverse:
         additional = 2
         reversed_stock_data = list(
             model.objects.filter(symbol=stock_symbol)
             .order_by('date')[:daterange + 1])[::-1]
         stock_data = reversed_stock_data[:period + additional]
+    elif alldata is False:
+        stock_data = stocks
     else:
         reversed_stock_data = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('-date').reverse()[
                               :daterange + 1]
@@ -122,6 +124,8 @@ def calculate_adx(stock_symbol, model, reverse, period, daterange):
     if reverse and len(stock_data) >= period + 2 or not reverse and len(stock_data) >= 27:
         if reverse:
             last_stock = stock_data[period - 1]
+        elif alldata is False:
+            last_stock = stock_data[len(stock_data) - 1]
         else:
             last_stock = stock_data[27 - 1]
 
@@ -139,15 +143,17 @@ def calculate_adx(stock_symbol, model, reverse, period, daterange):
         df['volume'] = df['volume'].astype(float)
         # Calculating true range
         df['tr'] = df[['high', 'low', 'close']].max(axis=1) - df[['high', 'low', 'close']].min(axis=1)
+
         # Calculating +DI and -DI
         df['+DI'] = 100 * (df['close'].diff() > 0) * df['volume'] / df['tr']
         df['-DI'] = 100 * (df['close'].diff() < 0) * df['volume'] / df['tr']
-        df['+DI'] = df['+DI'].rolling(period).mean()
-        df['-DI'] = df['-DI'].rolling(period).mean()
+        df['+DI'] = df['+DI'].rolling(period, min_periods=1).mean()
+        df['-DI'] = df['-DI'].rolling(period, min_periods=1).mean()
+
         # Calculating DX
         df['DX'] = 100 * (df['+DI'] - df['-DI']).abs() / (df['+DI'] + df['-DI'])
         # Calculating ADX
-        df['ADX'] = df['DX'].rolling(period).mean()
+        df['ADX'] = df['DX'].rolling(period, min_periods=1).mean()
 
         # Get the last ADX value
         last_row = df.iloc[-1]
@@ -158,6 +164,12 @@ def calculate_adx(stock_symbol, model, reverse, period, daterange):
             if reverse_signals_obj.adx is None or reverse_signals_obj.adx == 0:
                 reverse_signals_obj.adx = last_row['ADX']
                 reverse_signals_obj.save()
+        elif alldata is False:
+            signals_obj, _ = signals.objects.get_or_create(stock=stock_data[len(stock_data) - 1])
+            if signals_obj.adx is None:
+                print(f"ADX PÄIVÄ: {stock_data[len(stock_data) - 1].date}")
+                signals_obj.adx = last_row['ADX']
+                signals_obj.save()
         else:
             signals_obj = signals.objects.filter(stock=last_stock, symbol=stock_symbol).first()
             if signals_obj.adx is None or signals_obj.adx == 0:
@@ -184,6 +196,7 @@ def calculate_aroon(stock_symbol, daterange, stocks, period=25):
         # Save the calculated Aroon values
         signal, created = signals.objects.get_or_create(stock=stock_data[period - 1], symbol=stock_symbol)
         if created or signal.aroon_up is None or signal.aroon_up == 0:
+            print(f"AROON PÄIVÄ: {stock_data[period - 1].date}")
             signal.aroon_up = aroon_up
             signal.aroon_down = aroon_down
             signal.save()
@@ -294,6 +307,7 @@ def calculate_rsi(stock_symbol, model, reverse, period, daterange, stocks):
         rs = avg_gain / avg_loss if avg_loss != 0 else np.inf
         rsi = 100 - (100 / (1 + rs))
         if signals_obj.rsi14 is None:
+            print(f"RSI PÄIVÄ: {stock_data[period - 1].date}")
             signals_obj.rsi14 = rsi
             signals_obj.save()
 
@@ -354,7 +368,7 @@ def find_optimum_buy_sell_points(stock_symbol, daterange, alldata):
                 # reverse_indicator = reverse_signals.objects.get(stock=stock_daily)
                 indicator = signals.objects.get(stock=stock_daily)
                 if optimal_buy_sell_points.objects.filter(stock=stock_daily).exists():
-                    print("gaga")
+                    continue
                 else:
                     close_val = stock_daily.close
                     # prev_stock = finnish_stock_daily.objects.filter(symbol=stock_symbol,
@@ -379,29 +393,30 @@ def find_optimum_buy_sell_points(stock_symbol, daterange, alldata):
                         optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                                command="SELL", value=close_val)
     else:
-        if daterange > 203:
-            reverse_indicators = reverse_signals.objects.filter(symbol=stock_symbol).order_by('-stock__date')[:5][::-1]
-            reverse_indicator = reverse_indicators[0]
-            stock_daily = reverse_indicator.stock
+        stocks = finnish_stock_daily.objects.filter(symbol=stock_symbol).order_by('-date')[
+                   :2]
+        stock_data = stocks[::-1]
+        for i in range(len(stock_data)):
+            stock_daily = stock_data[i]
+            print(f"OSAKE: {stock_symbol}, PÄIVÄ: {stock_daily.date}")
+            # reverse_indicator = reverse_signals.objects.get(stock=stock_daily)
             indicator = signals.objects.get(stock=stock_daily)
             if optimal_buy_sell_points.objects.filter(stock=stock_daily).exists():
-                print("gaga")
+                continue
             else:
                 close_val = stock_daily.close
-                prev_stock = finnish_stock_daily.objects.filter(symbol=stock_symbol,
-                                                                date__lt=stock_daily.date).order_by(
-                    '-date').first()
-                prev_close_val = prev_stock.close
-                if (indicator.aroon_up > indicator.aroon_down * 1.1
-                        # and indicator.macd * 5 < indicator.macd_signal
-                        and close_val > prev_close_val - indicator.std_dev
-                        and indicator.ema50 > indicator.ema200):
+                if 23.5 < indicator.adx < 69.5 \
+                        and indicator.rsi14 < 76.5 \
+                        and indicator.aroon_up > indicator.aroon_down \
+                        and indicator.aroon_up > 61 \
+                        and indicator.aroon_down < 46.5:
                     optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                            command="BUY", value=close_val)
-                elif (indicator.aroon_up < indicator.aroon_down * 1.4
-                      and indicator.macd > indicator.macd_signal * 3
-                      and close_val < prev_close_val + indicator.std_dev
-                      and indicator.ema50 < indicator.ema200):
+                elif 54 > indicator.adx > 17.5 \
+                        and indicator.rsi14 > 65 \
+                        and indicator.aroon_up < indicator.aroon_down \
+                        and indicator.aroon_up < 48.5 \
+                        and indicator.aroon_down > 80:
                     optimal_buy_sell_points.objects.create(stock=stock_daily, symbol=stock_symbol,
                                                            command="SELL", value=close_val)
 

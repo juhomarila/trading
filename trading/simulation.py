@@ -10,21 +10,21 @@ MAX_PROCESSES = 8
 
 
 def simulate_trading(stock_indicator_data, buy_condition_params, sell_condition_params, last_close_values):
-    investment = {indicator['symbol']: 500 for indicator in stock_indicator_data}
-    stocks = {indicator['symbol']: 0 for indicator in stock_indicator_data}
-    prev_command = {indicator['symbol']: 'SELL' for indicator in stock_indicator_data}
-    i = {indicator['symbol']: 0 for indicator in stock_indicator_data}
+    investment = {indicator['stock__symbol']: 500 for indicator in stock_indicator_data}
+    stocks = {indicator['stock__symbol']: 0 for indicator in stock_indicator_data}
+    prev_command = {indicator['stock__symbol']: 'SELL' for indicator in stock_indicator_data}
+    i = {indicator['stock__symbol']: 0 for indicator in stock_indicator_data}
     for indicator in stock_indicator_data:
-        if i[indicator['symbol']] >= 186:
+        if i[indicator['stock__symbol']] >= 12:
             # Buy condition using parameters from buy_condition_params
-            if prev_command[indicator['symbol']] == 'SELL' \
+            if prev_command[indicator['stock__symbol']] == 'SELL' \
                     and buy_condition_params['adx_threshold'] < indicator['adx'] < buy_condition_params[
                 'adx_high_threshold'] \
                     and indicator['rsi14'] < buy_condition_params['rsi_threshold'] \
                     and indicator['aroon_up'] > indicator['aroon_down'] \
                     and indicator['aroon_up'] > buy_condition_params['aroon_up_thresholds'] \
                     and indicator['aroon_down'] < buy_condition_params['aroon_down_thresholds'] \
-                    and investment[indicator['symbol']] > 5:
+                    and investment[indicator['stock__symbol']] > 5:
                 # and stock_indicator_data[i].stock.close > stock_indicator_data[i].ema20 and stock_indicator_data[
                 #     i].stock.close > stock_indicator_data[i].ema50 \
                 #     and stock_indicator_data[i].stock.close > stock_indicator_data[i].ema100 and stock_indicator_data[
@@ -33,11 +33,11 @@ def simulate_trading(stock_indicator_data, buy_condition_params, sell_condition_
                 # and (indicator.macd < buy_condition_params['macd_thresholds']) \
                 # and (indicator.aroon_up > buy_condition_params['aroon_up_thresholds']) \
                 # and (indicator.aroon_down > buy_condition_params['aroon_down_thresholds']):
-                stocks[indicator['symbol']] = (investment[indicator['symbol']] - 5) / indicator['stock__close']
-                prev_command[indicator['symbol']] = 'BUY'
+                stocks[indicator['stock__symbol']] = (investment[indicator['stock__symbol']] - 5) / indicator['stock__close']
+                prev_command[indicator['stock__symbol']] = 'BUY'
 
             # Sell condition using parameters from sell_condition_params
-            elif (prev_command[indicator['symbol']] == 'BUY' and sell_condition_params['adx_threshold'] > indicator[
+            elif (prev_command[indicator['stock__symbol']] == 'BUY' and sell_condition_params['adx_threshold'] > indicator[
                 'adx'] >
                   sell_condition_params['adx_low_threshold']
                   and indicator['rsi14'] > sell_condition_params['rsi_threshold']
@@ -55,10 +55,10 @@ def simulate_trading(stock_indicator_data, buy_condition_params, sell_condition_
                 # and (indicator.macd < sell_condition_params['macd_thresholds']) \
                 # and (indicator.aroon_up < sell_condition_params['aroon_up_thresholds']) \
                 # and (indicator.aroon_down < sell_condition_params['aroon_down_thresholds']):
-                investment[indicator['symbol']] = stocks[indicator['symbol']] * indicator['stock__close'] - 5
-                stocks[indicator['symbol']] = 0
-                prev_command[indicator['symbol']] = 'SELL'
-        i[indicator['symbol']] += 1
+                investment[indicator['stock__symbol']] = stocks[indicator['stock__symbol']] * indicator['stock__close'] - 5
+                stocks[indicator['stock__symbol']] = 0
+                prev_command[indicator['stock__symbol']] = 'SELL'
+        i[indicator['stock__symbol']] += 1
 
     for entry in last_close_values:
         if stocks[entry['symbol']] != 0:
@@ -80,7 +80,7 @@ def optimize_parameters(buy_param_ranges, sell_param_ranges):
 
     processes = []
     stock_indicator_data = signals.objects.all().values('adx', 'rsi14', 'aroon_up', 'aroon_down',
-                                                        'stock__close', 'symbol').order_by('stock__date')
+                                                        'stock__close', 'stock__symbol', 'stock__date').order_by('stock__date')
 
     last_close_values = finnish_stock_daily.objects.exclude(symbol='S&P500').values('symbol').order_by('date').annotate(
         last_close=Max('date')).values('symbol',

@@ -128,12 +128,11 @@ def process_data(request):
     symbol_list = finnish_stock_daily.objects.values('symbol').order_by('symbol').distinct()
     if request.method == 'POST':
         func_name = request.POST.get('func_name')
-        symbol = request.POST.get('symbol')
         if func_name == 'bulk':
-            process_bulk_data(symbol)
+            process_bulk_data()
             return JsonResponse({'message': 'Massadatan prosessointi valmis'})
         elif func_name == 'buy_sell':
-            find_buy_sell_points(symbol)
+            find_buy_sell_points()
             return JsonResponse({'message': 'Osto/myynti pisteiden prosessointi valmis'})
         elif func_name == 'daily':
             process_daily_data()
@@ -192,7 +191,7 @@ def simulation():
     print("Best Overall Profit:", best_profit)
 
 
-def process_bulk_data(symbol):
+def process_bulk_data():
     daterange = 14  # For history as long as it goes
     # calculate_BBP8(symbol, finnish_stock_daily, True, 3, daterange)
     manager = Manager()
@@ -224,27 +223,28 @@ def multiprocess_data(symbol, data):
     connection.close()
     stocks = data.filter(symbol=symbol)
     for i in range(len(stocks)):
+        # if symbol == 'OUT1V':
         print(f"ITERAATIO: {i + 1}, PÄIVÄ: {stocks[i].date} OSAKE: {symbol}")
         calculate_aroon(symbol, i, stocks)
-        calculate_macd(symbol, finnish_stock_daily, False, 26, i, stocks)
-        calculate_sd(symbol, finnish_stock_daily, False, 14, i, stocks)
-        calculate_ema(symbol, finnish_stock_daily, False, 20, i, stocks)
-        calculate_ema(symbol, finnish_stock_daily, False, 50, i, stocks)
-        calculate_ema(symbol, finnish_stock_daily, False, 100, i, stocks)
-        calculate_ema(symbol, finnish_stock_daily, False, 200, i, stocks)
+        # calculate_macd(symbol, finnish_stock_daily, False, 26, i, stocks)
+        # calculate_sd(symbol, finnish_stock_daily, False, 14, i, stocks)
+        # calculate_ema(symbol, finnish_stock_daily, False, 20, i, stocks)
+        # calculate_ema(symbol, finnish_stock_daily, False, 50, i, stocks)
+        # calculate_ema(symbol, finnish_stock_daily, False, 100, i, stocks)
+        # calculate_ema(symbol, finnish_stock_daily, False, 200, i, stocks)
         calculate_rsi(symbol, finnish_stock_daily, False, 15, i, stocks)
-        calculate_adx(symbol, finnish_stock_daily, False, 14, i)
+        calculate_adx(symbol, finnish_stock_daily, False, 14, i, True, stocks)
         # find_optimum_buy_sell_points(symbol, i, False)
 
 
-def find_buy_sell_points(symbol):
+def find_buy_sell_points():
     manager = Manager()
     semaphore = Semaphore(MAX_PROCESSES)
     processes = []
     symbols = signals.objects.values('symbol').distinct()
     for stock_symbol in symbols:
         print(f"SYMBOL: {stock_symbol['symbol']}")
-        p = multiprocessing.Process(target=buy_sell_points_worker, args=(semaphore, stock_symbol['symbol'], 203, True))
+        p = multiprocessing.Process(target=buy_sell_points_worker, args=(semaphore, stock_symbol['symbol'], 26, True))
         processes.append(p)
         p.start()
 
@@ -269,8 +269,10 @@ def buy_sell_points_worker(semaphore, stock_symbol, daterange, alldata):
 def find_buy_sell_points_for_daily_data():
     symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
     for i in range(len(symbol_list)):
-        find_optimum_buy_sell_points(symbol_list[i]['symbol'], 50, True)
-        print(symbol_list[i]['symbol'])
+        if symbol_list[i]['symbol'] != "S&P500":
+            find_optimum_buy_sell_points(symbol_list[i]['symbol'], 50,
+                                         False)  # daterange here can be anything, doesn't affect calculations
+            print(symbol_list[i]['symbol'])
 
 
 def find_buy_sell_points_for_daily_data_cronjob():
@@ -280,13 +282,18 @@ def find_buy_sell_points_for_daily_data_cronjob():
 
 def process_daily_data():
     symbol_list = finnish_stock_daily.objects.values('symbol').distinct()
+
     for i in range(len(symbol_list)):
-        print(symbol_list[i]['symbol'])
-        daterange = 10  # for only 10 days, since data is new
-        # calculate_BBP8(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
-        calculate_sd(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
-        calculate_macd(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
-        calculate_adx(symbol_list[i]['symbol'], finnish_stock_daily, True, 3, daterange)
+        if symbol_list[i]['symbol'] != 'S&P500':
+            data = finnish_stock_daily.objects.filter(symbol=symbol_list[i]['symbol']).order_by('-date')[
+                   :27]  # IMPORTANT TO HAVE 27 since adx needs exactly 27 entries. If more results distort
+            stocks = data[::-1]
+            print(symbol_list[i]['symbol'])
+            for y in range(len(stocks)):
+                calculate_aroon(symbol_list[i]['symbol'], y, stocks)
+                calculate_rsi(symbol_list[i]['symbol'], finnish_stock_daily, False, 15, y, stocks)
+            for z in range(len(stocks)):
+                calculate_adx(symbol_list[i]['symbol'], finnish_stock_daily, False, 14, z, False, stocks)
 
 
 def process_daily_data_cronjob(request):
