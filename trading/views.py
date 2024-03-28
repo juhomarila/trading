@@ -440,7 +440,8 @@ def created_strategy(request):
         chosen_provider = request.POST.get('provider')
 
         buffer = io.BytesIO()
-        transactions, initial_investment_total, final_investment_total, hold_investment, investment_growth, hold_investment_growth = create_strategy(
+        (transactions, initial_investment_total, final_investment_total, hold_investment, investment_growth,
+         hold_investment_growth, results) = create_strategy(
             investment, start_date,
             end_date, chosen_stocks,
             chosen_provider)
@@ -461,7 +462,8 @@ def created_strategy(request):
             'final_investment_total': final_investment_total,
             'hold_investment': hold_investment,
             'investment_growth': investment_growth,
-            'hold_investment_growth': hold_investment_growth
+            'hold_investment_growth': hold_investment_growth,
+            'results': results
         }
         return render(request, 'createdstrategy.html', context)
     else:
