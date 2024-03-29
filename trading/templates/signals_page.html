@@ -14,7 +14,7 @@
         <tbody class="table-group-divider">
         {% for signal in signals %}
         <tr>
-            <td>{{ signal.symbol }}</td>
+            <td>{{ signal.symbol.company_name }}</td>
             <td>{{ signal.stock.date }}</td>
             <td style="{% if signal.command == 'BUY' %}color:green{% elif signal.command == 'SELL' %}color:red{% endif %}">
                     {{ signal.command }}

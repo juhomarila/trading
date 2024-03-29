@@ -21,6 +21,7 @@ from .models import signals, finnish_stock_daily, optimal_buy_sell_points
 from .indicators import calculate_adx, calculate_rsi, calculate_aroon, calculate_macd, \
     calculate_BBP8, calculate_sd, find_optimum_buy_sell_points, calculate_profit_loss, calculate_ema
 from .simulation import optimize_parameters
+from .stocks import Stock, real_names_list, stock_dict, real_names_list_without_symbol
 from .visualization import visualize_stock_and_investment, create_strategy
 
 MAX_PROCESSES = 8
@@ -125,11 +126,13 @@ def process_csv_data(symbol, file, delimiter):
 
 
 def process_data(request):
-    symbol_list = finnish_stock_daily.objects.values('symbol').order_by('symbol').distinct()
+    symbol_list = finnish_stock_daily.objects.values('symbol').order_by('symbol').distinct().exclude(symbol='S&P500')
+    real_names = real_names_list(symbol_list)
     if request.method == 'POST':
         func_name = request.POST.get('func_name')
+        symbols = request.POST.getlist('symbols[]')
         if func_name == 'bulk':
-            process_bulk_data()
+            process_bulk_data(symbols)
             return JsonResponse({'message': 'Massadatan prosessointi valmis'})
         elif func_name == 'buy_sell':
             find_buy_sell_points()
@@ -149,7 +152,7 @@ def process_data(request):
         else:
             return JsonResponse({'message': 'Invalid request'}, status=400)
     elif request.method == 'GET':
-        return render(request, 'process_data.html', {'symbols': symbol_list})
+        return render(request, 'process_data.html', {'symbol_list': real_names})
 
 
 def simulation():
@@ -193,18 +196,17 @@ def simulation():
     print("Best Overall Profit:", best_profit)
 
 
-def process_bulk_data():
+def process_bulk_data(symbols):
     daterange = 14  # For history as long as it goes
     # calculate_BBP8(symbol, finnish_stock_daily, True, 3, daterange)
     manager = Manager()
-    semaphore = Semaphore(100)
+    semaphore = Semaphore(8)
     processes = []
-    symbols = finnish_stock_daily.objects.values('symbol').distinct()
     data = finnish_stock_daily.objects.all().order_by('date')
     for stock_symbol in symbols:
-        if stock_symbol['symbol'] != 'S&P500':
+        if stock_symbol != 'S&P500':
             # multiprocess_data(stock_symbol['symbol'], data)
-            p = multiprocessing.Process(target=bulk_worker, args=(semaphore, stock_symbol['symbol'], data,))
+            p = multiprocessing.Process(target=bulk_worker, args=(semaphore, stock_symbol, data,))
             processes.append(p)
             p.start()
 
@@ -390,15 +392,16 @@ def visualize(request):
 
 def index(request):
     symbol_list = finnish_stock_daily.objects.values('symbol').distinct().order_by('symbol').exclude(symbol='S&P500')
-    return render(request, 'index.html', {'symbol_list': symbol_list})
+    real_names = real_names_list(symbol_list)
+    return render(request, 'index.html', {'symbol_list': real_names})
 
 
 def settings(request, symbol):
     start_date = finnish_stock_daily.objects.filter(symbol=symbol).aggregate(start_date=Min('date'))
-
     max_date = finnish_stock_daily.objects.filter(symbol=symbol).aggregate(max_date=Max('date'))
+    stock = stock_dict[symbol]
     context = {
-        'stock_symbol': symbol,
+        'stock_symbol': stock,
         'start_date': start_date['start_date'],
         'max_date': max_date['max_date']
     }
@@ -414,15 +417,21 @@ def signals_page(request, symbol):
         buy_sell_signals = optimal_buy_sell_points.objects.filter(symbol=symbol).order_by(
             '-stock__date')
 
+    for signal in buy_sell_signals:
+        if signal.symbol in stock_dict:
+            stock = stock_dict[signal.symbol]
+            signal.symbol = stock
+
     return render(request, 'signals_page.html', {'signals': buy_sell_signals})
 
 
 def strategy(request):
     symbol_list = finnish_stock_daily.objects.values('symbol').distinct().order_by('symbol').exclude(symbol='S&P500')
+    real_names = real_names_list(symbol_list)
     start_date = finnish_stock_daily.objects.aggregate(start_date=Min('date'))
     max_date = finnish_stock_daily.objects.aggregate(max_date=Max('date'))
     context = {
-        'symbol_list': symbol_list,
+        'symbol_list': real_names,
         'start_date': start_date['start_date'],
         'max_date': max_date['max_date']
     }
@@ -448,11 +457,28 @@ def created_strategy(request):
         image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
         plt.close()
 
+        real_names = real_names_list_without_symbol(chosen_stocks)
+
+        for i, result in enumerate(results):
+            if result[0] in stock_dict:
+                stock = stock_dict[result[0]]
+                result_list = list(result)
+                result_list[0] = stock.company_name
+                results[i] = tuple(result_list)
+
+        for i, transaction in enumerate(transactions):
+            print(transaction)
+            if transaction[1] in stock_dict:
+                stock = stock_dict[transaction[1]]
+                transaction_list = list(transaction)
+                transaction_list[1] = stock.company_name
+                transactions[i] = tuple(transaction_list)
+
         context = {
             'investment': investment,
             'start_date': start_date,
             'end_date': end_date,
-            'chosen_stocks': chosen_stocks,
+            'chosen_stocks': real_names,
             'chosen_provider': chosen_provider,
             'img': image_base64,
             'transactions': transactions,

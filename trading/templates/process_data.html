@@ -18,11 +18,16 @@
             // Get CSRF token
             var csrftoken = $("[name=csrfmiddlewaretoken]").val();
             // Make AJAX request to the backend
+            // Get selected symbols from checkboxes
+            var symbols = [];
+            $('.symbol-checkbox:checked').each(function() {
+                symbols.push($(this).val());
+            });
             $.ajax({
                 url: '/process-data/',
                 method: 'POST',
-                headers: {'X-CSRFToken': csrftoken},  // Include CSRF token in headers
-                data: {'func_name': funcName, 'csrfmiddlewaretoken': csrftoken},
+                headers: {'X-CSRFToken': csrftoken},
+                data: {'func_name': funcName, 'symbols': symbols},
                 success: function(response) {
                     // Hide spinner
                     $('#spinner').hide();
@@ -45,7 +50,20 @@
 <div class="container mt-5 text-center">
     {% csrf_token %}
     <form id="processForm" method="post">
-        <button type="button" class="btn btn-primary mr-2" onclick="processData('bulk')">Prosessoi kaikista osakkeesta
+        <div class="input-group mb-3">
+            <span class="input-group-text">Valitse osakkeet:</span>
+            <div class="form-check">
+                {% for symbol in symbol_list %}
+                <div class="form-check">
+                    <input class="form-check-input symbol-checkbox" type="checkbox" value="{{ symbol.symbol }}" id="{{ symbol.symbol }}">
+                    <label class="form-check-label" for="{{ symbol.symbol }}">
+                        {{ symbol.company_name }}
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <button type="button" class="btn btn-primary mr-2" onclick="processData('bulk')">Prosessoi valitusta osakkeesta
             signaalit
         </button>
         <button type="button" class="btn btn-primary mr-2" onclick="processData('buy_sell')">Prosessoi kaikista

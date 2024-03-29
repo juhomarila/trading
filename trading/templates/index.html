@@ -6,7 +6,7 @@
     <ul class="list-group list-group-flush">
         {% for symbol in symbol_list %}
         <li class="list-group-item d-flex justify-content-center">
-            <a class="nav-link link" href="{% url 'settings' symbol=symbol.symbol %}">{{ symbol.symbol }}</a>
+            <a class="nav-link link" href="{% url 'settings' symbol=symbol.symbol %}">{{ symbol.company_name }}</a>
         </li>
         {% endfor %}
     </ul>
