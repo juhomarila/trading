@@ -115,6 +115,17 @@ def process_csv_data(symbol, file, delimiter):
                 turnover = float(row[9].replace(",", "."))
                 trades = int(float(row[10].replace(",", ".")))
 
+                # This is done for DIGIA since there was 02.04.2016 a split where DIGIA was split into two stocks,
+                # DIGIA and QTCOM. If stock data is not adjusted, indicator calculations for DIGIA will get distorted
+                if symbol == 'DIGIA' and date <= datetime.datetime.strptime('2016-04-29', '%Y-%m-%d').date():
+                    bid = bid / 2
+                    ask = ask / 2
+                    open_price = open_price / 2
+                    high_price = high_price / 2
+                    low_price = low_price / 2
+                    closing_price = closing_price / 2
+                    average_price = average_price / 2
+
                 print(symbol, date, bid, ask, open_price, high_price, low_price,
                       closing_price, average_price, total_volume, turnover, trades)
                 if not finnish_stock_daily.objects.filter(symbol=symbol, date=date).exists():

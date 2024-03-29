@@ -23,7 +23,7 @@
             <button type="button" class="btn btn-outline-secondary" onclick="fillDates()">Maksimi aikäväli</button>
         </div>
         <button type="submit" class="btn btn-outline-secondary">Luo taulu</button>
-        <input type="hidden" name="t" value="{{ stock_symbol }}">
+        <input type="hidden" name="t" value="{{ stock_symbol.symbol }}">
     </form>
     <div class="container fixed-bottom d-flex justify-content-center mb-3">
         <a href="{% url 'signals_page' symbol=stock_symbol.symbol %}" class="btn btn-outline-secondary btn-lg"
