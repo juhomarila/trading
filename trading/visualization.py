@@ -349,19 +349,19 @@ def calculate_stocks_and_investment(row, expenses, length, investment_by_stock, 
     stocks = None
     investment = None
     if row.name > length:
-        if row['date'].month == 3:
-            if hold_dividend_by_stock[row['symbol']][row['date'].year] == 0 and hold_stocks_by_stock[
-                row['symbol']] != 0:
-                hold_dividend_by_stock[row['symbol']][
-                    row['date'].year] = 1  # to rule out not to pay again next day in March
-                dividend = hold_stocks_by_stock[row['symbol']] * row['price'] * 0.025
-                if dividend >= expenses:
-                    hold_stocks_by_stock[row['symbol']] += (dividend - expenses) / row['price']
-            if dividend_by_stock[row['symbol']][row['date'].year] == 0 and row['prev_command'] == 'BUY':
-                print(
-                    f"INVESTMENT NOW: {investment_by_stock[row['symbol']] * 1.025}, DIVIDEND: {investment_by_stock[row['symbol']] * 0.025}, DATE: {row['date']}, STOCK: {row['symbol']}")
-                dividend_by_stock[row['symbol']][row['date'].year] = stocks_by_stock[row['symbol']] * row[
-                    'price'] * 0.025
+        # if row['date'].month == 3:
+        #     if hold_dividend_by_stock[row['symbol']][row['date'].year] == 0 and hold_stocks_by_stock[
+        #         row['symbol']] != 0:
+        #         hold_dividend_by_stock[row['symbol']][
+        #             row['date'].year] = 1  # to rule out not to pay again next day in March
+        #         dividend = hold_stocks_by_stock[row['symbol']] * row['price'] * 0.025
+        #         if dividend >= expenses:
+        #             hold_stocks_by_stock[row['symbol']] += (dividend - expenses) / row['price']
+        #     if dividend_by_stock[row['symbol']][row['date'].year] == 0 and row['prev_command'] == 'BUY':
+        #         print(
+        #             f"INVESTMENT NOW: {investment_by_stock[row['symbol']] * 1.025}, DIVIDEND: {investment_by_stock[row['symbol']] * 0.025}, DATE: {row['date']}, STOCK: {row['symbol']}")
+        #         dividend_by_stock[row['symbol']][row['date'].year] = stocks_by_stock[row['symbol']] * row[
+        #             'price'] * 0.025
         if row['command'] == 'BUY' and row['prev_command'] == 'SELL':
             stocks = (investment_by_stock[row['symbol']] - expenses) / row['price']
             stocks_by_stock[row['symbol']] = stocks
@@ -386,10 +386,10 @@ def calculate_stocks_and_investment(row, expenses, length, investment_by_stock, 
             transactions.append(
                 (row['date'], row['symbol'], round(row['price'], 2), row['command'],
                  round(sum(investment_by_stock.values()), 2)))
-            for year in range(first_buy_sell_stock.date.year, row['date'].year):
-                dividend = dividend_by_stock[row['symbol']].pop(year, 0)
-                investment_by_stock[row['symbol']] += dividend
-                investment = investment_by_stock[row['symbol']]
+            # for year in range(first_buy_sell_stock.date.year, row['date'].year):
+            #     dividend = dividend_by_stock[row['symbol']].pop(year, 0)
+            #     investment_by_stock[row['symbol']] += dividend
+            #     investment = investment_by_stock[row['symbol']]
         elif row['command'] == 'SELL' and row['prev_command'] == 'SELL':
             stocks = 0
             investment = investment_by_stock[row['symbol']]
@@ -397,10 +397,11 @@ def calculate_stocks_and_investment(row, expenses, length, investment_by_stock, 
             if row['symbol'] in hold_stocks_by_stock and hold_stocks_by_stock[row['symbol']] != 0:
                 hold_investment_by_stock[row['symbol']] = hold_stocks_by_stock[row['symbol']] * row['price']
             if stocks_by_stock[row['symbol']] != 0:
+                print(f"PÄIVÄ {row['date']}, OSAKE: {row['symbol']}, VALUE: {row['price']}")
                 investment_by_stock[row['symbol']] = stocks_by_stock[row['symbol']] * row['price']
                 investment = investment_by_stock[row['symbol']]
-                for year in range(first_buy_sell_stock.date.year, row['date'].year):
-                    dividend = dividend_by_stock[row['symbol']].pop(year, 0)
-                    investment_by_stock[row['symbol']] += dividend
-                    investment = investment_by_stock[row['symbol']]
+                # for year in range(first_buy_sell_stock.date.year, row['date'].year):
+                #     dividend = dividend_by_stock[row['symbol']].pop(year, 0)
+                #     investment_by_stock[row['symbol']] += dividend
+                #     investment = investment_by_stock[row['symbol']]
     return pd.Series({'stocks': stocks, 'investment': investment})

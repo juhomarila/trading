@@ -7,6 +7,7 @@ import timeit
 import csv
 import matplotlib.pyplot as plt
 import io
+import random
 
 from django.db.models import Min, Max, OuterRef, Subquery
 from django.http import HttpResponse, JsonResponse
@@ -16,6 +17,7 @@ from django.db import connection
 from yahoofinancials import YahooFinancials
 from io import StringIO
 
+from .algorithms import optimize_with_learning
 # from .machinelearning import train_machine_learning_model_future_values, train_machine_learning_model
 from .models import signals, finnish_stock_daily, optimal_buy_sell_points
 from .indicators import calculate_adx, calculate_rsi, calculate_aroon, calculate_macd, \
@@ -169,42 +171,85 @@ def process_data(request):
 def simulation():
     list_half_step = [i / 2 for i in range(0, 201)]
     list_one_step = list(range(101))
+    #1
+    # buy_param_ranges = {
+    #     'adx_threshold': [14.5, 24.5],
+    #     'adx_high_threshold': [34, 44],
+    #     'aroon_up_thresholds': [48, 58],
+    #     'aroon_down_thresholds': [63.5, 73.5],
+    #     'rsi_threshold': [46, 56],
+    # }
+    # sell_param_ranges = {
+    #     'adx_threshold': [25, 35],
+    #     'adx_low_threshold': [7.5, 17.5],
+    #     'aroon_up_thresholds': [40.5, 50.5],
+    #     'aroon_down_thresholds': [79, 89],
+    #     'rsi_threshold': [55, 65],
+    # }
+    # 2
+    # buy_param_ranges = {
+    #     'adx_threshold': [24.5, 34.5],
+    #     'adx_high_threshold': [44, 54],
+    #     'aroon_up_thresholds': [58, 68],
+    #     'aroon_down_thresholds': [53.5, 63.5],
+    #     'rsi_threshold': [56, 66],
+    # }
+    # sell_param_ranges = {
+    #     'adx_threshold': [35, 45],
+    #     'adx_low_threshold': [2.5, 7.5],
+    #     'aroon_up_thresholds': [50.5, 60.5],
+    #     'aroon_down_thresholds': [69, 79],
+    #     'rsi_threshold': [65, 75],
+    # }
     buy_param_ranges = {
-        'adx_threshold': [55.5],
-        'adx_high_threshold': [63.5],
-        'aroon_up_thresholds': [69.5],
+        'adx_threshold': [23.5],
+        'adx_high_threshold': [62.5],
+        'aroon_up_thresholds': [58],
         'aroon_down_thresholds': [73.5],
         'rsi_threshold': [56],
     }
     sell_param_ranges = {
-        'adx_threshold': [33.5],
-        'adx_low_threshold': [22.5],
+        'adx_threshold': [35],
+        'adx_low_threshold': [17.5],
         'aroon_up_thresholds': [50.5],
         'aroon_down_thresholds': [89],
-        'rsi_threshold': [64.5],
+        'rsi_threshold': [65],
     }
     # buy_param_ranges = {
-    #     'adx_threshold': [55.5],
-    #     'adx_high_threshold': [63.5],
-    #     'aroon_up_thresholds': [69.5],
-    #     'aroon_down_thresholds': [73.5],
-    #     'rsi_threshold': [56],
+    #     'adx_threshold': [15, 60],
+    #     'adx_high_threshold': [20, 70],
+    #     'aroon_up_thresholds': [30, 80],
+    #     'aroon_down_thresholds': [10, 70],
+    #     'rsi_threshold': [20, 80],
     # }
     # sell_param_ranges = {
-    #     'adx_threshold': [33.5],
-    #     'adx_low_threshold': [22.5],
-    #     'aroon_up_thresholds': [50.5],
-    #     'aroon_down_thresholds': [89],
-    #     'rsi_threshold': [64.5],
+    #     'adx_threshold': [15, 60],
+    #     'adx_low_threshold': [5, 45],
+    #     'aroon_up_thresholds': [20, 60],
+    #     'aroon_down_thresholds': [30, 90],
+    #     'rsi_threshold': [30, 80],
     # }
+    # optimize_with_learning(buy_param_ranges, sell_param_ranges)
+    stock_indicator_data = signals.objects.all().values('symbol', 'adx', 'rsi14', 'aroon_up', 'aroon_down',
+                                                        'stock__close', 'stock__date').order_by('stock__date')
 
+    max_date = finnish_stock_daily.objects.exclude(symbol='S&P500').aggregate(max_date=Max('date'))['max_date']
+    last_close_values = finnish_stock_daily.objects.filter(date__range=(max_date, max_date)).exclude(
+        symbol='S&P500').values('symbol',
+                                'close',
+                                'date')
     start = timeit.default_timer()
-    best_buy_params, best_sell_params, best_profit = optimize_parameters(buy_param_ranges, sell_param_ranges)
+    (best_buy_params, best_sell_params, best_profit, best_victories_buy_params, best_victories_sell_params,
+     best_victories, best_profit_victories, best_victories_profit) = optimize_parameters(
+        buy_param_ranges, sell_param_ranges, stock_indicator_data, max_date, last_close_values)
     end = timeit.default_timer()
     print(f"Execution Time: {end - start}")
     print("Best Buy Parameters:", best_buy_params)
     print("Best Sell Parameters:", best_sell_params)
-    print("Best Overall Profit:", best_profit)
+    print(f"Best Overall Profit and Victory percent: {best_profit}, {round(best_profit_victories * 100, 2)}%")
+    print("Best Victory Buy Parameters:", best_victories_buy_params)
+    print("Best Victory Sell Parameters:", best_victories_sell_params)
+    print(f"Best Overall Victory and profit: {round(best_victories * 100, 2)}%, {best_victories_profit}")
 
 
 def process_bulk_data(symbols):

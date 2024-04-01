@@ -165,7 +165,7 @@ def calculate_adx(stock_symbol, model, reverse, period, daterange, alldata, stoc
                 reverse_signals_obj.adx = last_row['ADX']
                 reverse_signals_obj.save()
         elif alldata is False:
-            signals_obj, _ = signals.objects.get_or_create(stock=stock_data[len(stock_data) - 1])
+            signals_obj, _ = signals.objects.get_or_create(stock=stock_data[len(stock_data) - 1], symbol=stock_symbol)
             if signals_obj.adx is None:
                 signals_obj.adx = last_row['ADX']
                 signals_obj.save()
@@ -292,7 +292,7 @@ def calculate_rsi(stock_symbol, model, reverse, period, daterange, stocks):
         stock_data = reversed_stock_data[0 if daterange < period else daterange - period + 1:]
 
     if len(stock_data) >= period:
-        signals_obj, _ = signals.objects.get_or_create(stock=stock_data[period - 1])
+        signals_obj, _ = signals.objects.get_or_create(stock=stock_data[period - 1], symbol=stock_symbol)
         data = [data.close for data in stock_data[::-1]]
         close_prices = {'close': data}
         delta = np.diff(close_prices['close'])
